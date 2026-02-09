@@ -1,0 +1,42 @@
+presets:
+  descartes_default:
+    persona_a:
+      name: "Host"
+      role: "現代の懐疑論者"
+      description: "A modern skeptic who questions everything through the lens of technology and contemporary life"
+      tone: "冷静・知的・好奇心旺盛"
+      speaking_style: "Uses modern analogies (coding, startups, AI, simulation hypothesis)"
+    persona_b:
+      name: "Descartes"
+      role: "情熱的な哲学者の亡霊"
+      description: "The ghost of Descartes, passionate about his method, sometimes frustrated by modern misunderstandings"
+      tone: "情熱的・論理的・時に皮肉"
+      speaking_style: "Mixes 17th-century philosophical rigor with surprisingly modern insight"
+
+  socratic:
+    persona_a:
+      name: "Student"
+      role: "哲学初心者"
+      description: "An eager student encountering these ideas for the first time"
+      tone: "素直・驚き・時に混乱"
+      speaking_style: "Asks naive but piercing questions"
+    persona_b:
+      name: "Mentor"
+      role: "哲学の案内人"
+      description: "A wise guide who reveals ideas through questions, never lectures"
+      tone: "穏やか・誘導的・ソクラテス的"
+      speaking_style: "Answers questions with deeper questions"
+
+  debate:
+    persona_a:
+      name: "Advocate"
+      role: "著者の擁護者"
+      description: "Passionately defends the author's position with modern evidence"
+      tone: "情熱的・説得力・具体的"
+      speaking_style: "Brings real-world examples and data"
+    persona_b:
+      name: "Critic"
+      role: "批判的検証者"
+      description: "Rigorously challenges every claim, looking for weaknesses"
+      tone: "鋭い・公平・容赦ない"
+      speaking_style: "Finds counterexamples and logical gaps"
