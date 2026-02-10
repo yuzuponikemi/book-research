@@ -1,0 +1,55 @@
+book:
+  title: "Discourse on the Method"
+  title_ja: "方法序説"
+  author: "René Descartes"
+  author_ja: "ルネ・デカルト"
+  year: 1637
+
+source:
+  type: "gutenberg"          # "gutenberg" | "local_file" | "url"
+  url: "https://gutenberg.org/cache/epub/59/pg59.txt"
+  cache_filename: "pg59.txt"
+
+chunking:
+  strategy: "regex"          # "regex" | "chapter" | "heading" | "token"
+  pattern: "^(PART\\s+(?:I{1,3}|IV|V|VI))\\b"
+
+research:
+  search_queries:
+    - "{author} {title} historical context"
+    - "{author} biography philosophical life"
+    - "{title} critical reception philosophy"
+    - "{title} modern significance"
+  reference_files:
+    - "data/gemini-houhoujosetsu.md"
+  max_search_results: 5
+
+context:
+  era: "17th century"
+  tradition: "Rationalism, Early Modern Philosophy"
+  key_terms:
+    - "Four Rules of the Method"
+    - "Methodical Doubt"
+    - "Cogito ergo sum"
+    - "Provisional Morality"
+    - "Mind-Body Dualism"
+  notable_critics:
+    - name: "Pascal"
+      perspective: "Criticized for reducing God to a first cause — 'Descartes is unforgivable'"
+    - name: "Hume"
+      perspective: "Challenged rationalist foundations with empiricism"
+    - name: "Kant"
+      perspective: "Synthesized rationalism and empiricism into critical philosophy"
+    - name: "Arnauld"
+      perspective: "Pointed out the Cartesian Circle in the Fourth Objections"
+    - name: "Gassendi"
+      perspective: "Criticized Cogito and dualism from an empiricist standpoint in the Fifth Objections"
+    - name: "Leibniz"
+      perspective: "Criticized the Four Rules as oversimplified; proposed universal characteristic"
+
+prompt_fragments:
+  work_description: >
+    Descartes' "Discourse on the Method" (1637) is a foundational text of modern philosophy.
+  analysis_guidance: >
+    Pay attention to: the Four Rules, the progression from doubt to certainty,
+    the tension between the mechanical worldview and the existence of the soul.

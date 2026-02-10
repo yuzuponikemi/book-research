@@ -12,12 +12,18 @@ from pathlib import Path
 
 import yaml
 
+from src.book_config import load_book_config
 from src.logger import flush_log, make_run_id
 from src.reader.ingestion import ingest
 from src.reader.analyst import analyze_chunks
 from src.reader.synthesizer import synthesize
+from src.researcher.researcher import research, format_research_context
+from src.critic.critic import critique, format_critique_report
+from src.director.enricher import enrich, format_enrichment_report
+from src.researcher.reading_material import generate_reading_material
 from src.director.planner import plan
 from src.dramaturg.scriptwriter import write_scripts
+from src.translator import translate_intermediate_outputs
 
 
 CONFIG_DIR = Path(__file__).parent / "config"
@@ -77,8 +83,14 @@ def format_analysis_report(analyses: list[dict]) -> str:
         concepts = analysis.get("concepts", [])
         aporias = analysis.get("aporias", [])
         relations = analysis.get("relations", [])
+        arguments = analysis.get("arguments", [])
+        rhetorical = analysis.get("rhetorical_strategies", [])
         lines.append(f"## Chunk {i+1}")
-        lines.append(f"Concepts: {len(concepts)} | Aporias: {len(aporias)} | Relations: {len(relations)}")
+        lines.append(
+            f"Concepts: {len(concepts)} | Aporias: {len(aporias)} | "
+            f"Relations: {len(relations)} | Arguments: {len(arguments)} | "
+            f"Rhetorical: {len(rhetorical)}"
+        )
         lines.append("")
 
         if concepts:
@@ -102,6 +114,24 @@ def format_analysis_report(analyses: list[dict]) -> str:
             for r in relations:
                 lines.append(f"- {r.get('source', '?')} --[{r.get('relation_type', '?')}]--> {r.get('target', '?')}")
                 lines.append(f"  {r.get('evidence', '')[:100]}")
+            lines.append("")
+
+        if arguments:
+            lines.append("### Argument Structures")
+            for arg in arguments:
+                lines.append(f"- **{arg.get('id', '?')}** ({arg.get('argument_type', '?')})")
+                for p in arg.get("premises", []):
+                    lines.append(f"  - Premise: {p[:100]}")
+                lines.append(f"  - Conclusion: {arg.get('conclusion', '')[:100]}")
+            lines.append("")
+
+        if rhetorical:
+            lines.append("### Rhetorical Strategies")
+            for rs in rhetorical:
+                lines.append(f"- **{rs.get('strategy_type', '?')}** (`{rs.get('id', '?')}`)")
+                lines.append(f"  {rs.get('description', '')[:120]}")
+                if rs.get("original_quote"):
+                    lines.append(f"  > \"{rs['original_quote'][:100]}\"")
             lines.append("")
 
         logic = analysis.get("logic_flow", "")
@@ -230,6 +260,11 @@ def main():
         description="Project Cogito: Philosophical text -> podcast scripts"
     )
     parser.add_argument(
+        "--book",
+        default="descartes_discourse",
+        help="Book config name from config/books/ (default: descartes_discourse)",
+    )
+    parser.add_argument(
         "--mode",
         choices=["essence", "curriculum", "topic"],
         default="essence",
@@ -255,10 +290,30 @@ def main():
         default="qwen3-next",
         help="Ollama model for Dramaturg layer (default: qwen3-next)",
     )
+    parser.add_argument(
+        "--translator-model",
+        default="translategemma:12b",
+        help="Ollama model for Japanese translation (default: translategemma:12b)",
+    )
+    parser.add_argument(
+        "--skip-translate",
+        action="store_true",
+        help="Skip the translation step",
+    )
+    parser.add_argument(
+        "--skip-research",
+        action="store_true",
+        help="Skip research/critique/enrichment stages (use original pipeline only)",
+    )
     args = parser.parse_args()
 
     if args.mode == "topic" and not args.topic:
         parser.error("--topic is required when using topic mode")
+
+    # Load book configuration
+    book_config = load_book_config(args.book)
+    book = book_config["book"]
+    book_title = book["title"]
 
     persona_config = load_persona_config(args.persona)
     run_id = make_run_id()
@@ -267,26 +322,48 @@ def main():
     run_dir = DATA_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    # Count total stages
+    base_stages = 5  # ingest, analyze, synthesize, plan, script
+    research_stages = 0 if args.skip_research else 4  # research, critique, enrich, reading material
+    translate_stages = 0 if args.skip_translate else 1
+    total_stages = base_stages + research_stages + translate_stages
+    current_stage = 0
+
     print("=" * 60)
     print("  Project Cogito")
     print("=" * 60)
     print(f"  Run ID       : {run_id}")
+    print(f"  Book         : {book_title} ({book.get('author', '')})")
     print(f"  Mode         : {args.mode}")
     print(f"  Persona      : {args.persona}")
     print(f"  Reader model : {args.reader_model}")
     print(f"  Dramaturg    : {args.dramaturg_model}")
+    if not args.skip_translate:
+        print(f"  Translator   : {args.translator_model}")
+    print(f"  Research     : {'skip' if args.skip_research else 'enabled'}")
     if args.topic:
         print(f"  Topic        : {args.topic}")
     print(f"  Output dir   : {run_dir}")
     print("=" * 60)
     print()
 
+    # Build work_description for translator
+    pf = book_config.get("prompt_fragments", {})
+    work_description = pf.get(
+        "work_description",
+        f'{book.get("author", "the author")}\'s "{book_title}"'
+    )
+
     # Shared state that accumulates through the pipeline
     state = {
-        "book_title": "Discourse on the Method",
+        "book_title": book_title,
+        "book_config": book_config,
         "raw_chunks": [],
         "chunk_analyses": [],
         "concept_graph": {},
+        "research_context": {},
+        "critique_report": {},
+        "enrichment": {},
         "mode": args.mode,
         "topic": args.topic,
         "persona_config": persona_config,
@@ -298,7 +375,8 @@ def main():
     }
 
     # ── Stage 1: Ingest ─────────────────────────────────────────
-    print("[1/5] Ingestion: downloading and chunking text...")
+    current_stage += 1
+    print(f"[{current_stage}/{total_stages}] Ingestion: downloading and chunking text...")
     t0 = time.time()
 
     result = ingest(state)
@@ -321,7 +399,8 @@ def main():
     print()
 
     # ── Stage 2: Analyze chunks ─────────────────────────────────
-    print(f"[2/5] Analysis: extracting concepts from {n_chunks} chunks (model: {args.reader_model})...")
+    current_stage += 1
+    print(f"[{current_stage}/{total_stages}] Analysis: extracting concepts from {n_chunks} chunks (model: {args.reader_model})...")
     print(f"      This will make {n_chunks} LLM calls — may take a while.")
     t0 = time.time()
 
@@ -331,7 +410,9 @@ def main():
     elapsed = time.time() - t0
     total_concepts = sum(len(a.get("concepts", [])) for a in state["chunk_analyses"])
     total_aporias = sum(len(a.get("aporias", [])) for a in state["chunk_analyses"])
-    print(f"      -> {total_concepts} concepts, {total_aporias} aporias across all chunks ({elapsed:.1f}s)")
+    total_arguments = sum(len(a.get("arguments", [])) for a in state["chunk_analyses"])
+    print(f"      -> {total_concepts} concepts, {total_aporias} aporias, "
+          f"{total_arguments} arguments across all chunks ({elapsed:.1f}s)")
 
     save_intermediate(run_dir, "02_chunk_analyses", state["chunk_analyses"])
     p = save_readable(run_dir, "02_chunk_analyses.md", format_analysis_report(state["chunk_analyses"]))
@@ -339,7 +420,8 @@ def main():
     print()
 
     # ── Stage 3: Synthesize ─────────────────────────────────────
-    print(f"[3/5] Synthesis: merging chunk analyses into unified concept graph...")
+    current_stage += 1
+    print(f"[{current_stage}/{total_stages}] Synthesis: merging chunk analyses into unified concept graph...")
     t0 = time.time()
 
     result = synthesize(state)
@@ -358,8 +440,83 @@ def main():
     print(f"      Saved: {p}")
     print()
 
+    # ── Stage 3b: Research (optional) ────────────────────────────
+    if not args.skip_research:
+        current_stage += 1
+        print(f"[{current_stage}/{total_stages}] Research: gathering web search results and reference materials...")
+        t0 = time.time()
+
+        result = research(state)
+        state.update(result)
+
+        elapsed = time.time() - t0
+        rc = state["research_context"]
+        n_sources = len(rc.get("web_sources", []))
+        n_refs = len(rc.get("reference_files", []))
+        print(f"      -> {n_sources} web sources, {n_refs} reference files ({elapsed:.1f}s)")
+
+        save_intermediate(run_dir, "03b_research_context", rc)
+        p = save_readable(run_dir, "03b_research_context.md", format_research_context(rc))
+        print(f"      Saved: {p}")
+        print()
+
+        # ── Stage 3c: Critique ───────────────────────────────────
+        current_stage += 1
+        print(f"[{current_stage}/{total_stages}] Critique: generating critical perspectives...")
+        t0 = time.time()
+
+        result = critique(state)
+        state.update(result)
+
+        elapsed = time.time() - t0
+        cr = state["critique_report"]
+        n_critiques = len(cr.get("critiques", []))
+        n_debates = len(cr.get("overarching_debates", []))
+        print(f"      -> {n_critiques} concept critiques, {n_debates} overarching debates ({elapsed:.1f}s)")
+
+        save_intermediate(run_dir, "03c_critique_report", cr)
+        p = save_readable(run_dir, "03c_critique_report.md", format_critique_report(cr))
+        print(f"      Saved: {p}")
+        print()
+
+        # ── Stage 3d: Enrich ─────────────────────────────────────
+        current_stage += 1
+        print(f"[{current_stage}/{total_stages}] Enrichment: creating integrated context summaries...")
+        t0 = time.time()
+
+        result = enrich(state)
+        state.update(result)
+
+        elapsed = time.time() - t0
+        enrichment = state["enrichment"]
+        en_len = len(enrichment.get("enrichment_summary", ""))
+        ja_len = len(enrichment.get("enrichment_summary_ja", ""))
+        print(f"      -> EN summary: {en_len} chars, JA summary: {ja_len} chars ({elapsed:.1f}s)")
+
+        save_intermediate(run_dir, "03d_enriched_context", enrichment)
+        p = save_readable(run_dir, "03d_enriched_context.md", format_enrichment_report(enrichment))
+        print(f"      Saved: {p}")
+        print()
+
+        # ── Stage 3e: Reading Material ──────────────────────────────
+        current_stage += 1
+        print(f"[{current_stage}/{total_stages}] Reading Material: generating comprehensive study guide...")
+        t0 = time.time()
+
+        result = generate_reading_material(state)
+        state.update(result)
+
+        elapsed = time.time() - t0
+        rm_text = state.get("reading_material", "")
+        print(f"      -> {len(rm_text)} chars ({elapsed:.1f}s)")
+
+        p = save_readable(run_dir, "03e_reading_material.md", rm_text)
+        print(f"      Saved: {p}")
+        print()
+
     # ── Stage 4: Plan ───────────────────────────────────────────
-    print(f"[4/5] Planning: generating syllabus ({args.mode} mode)...")
+    current_stage += 1
+    print(f"[{current_stage}/{total_stages}] Planning: generating syllabus ({args.mode} mode)...")
     t0 = time.time()
 
     result = plan(state)
@@ -382,7 +539,8 @@ def main():
     print()
 
     # ── Stage 5: Write scripts ──────────────────────────────────
-    print(f"[5/5] Scriptwriting: generating dialogue (model: {args.dramaturg_model})...")
+    current_stage += 1
+    print(f"[{current_stage}/{total_stages}] Scriptwriting: generating dialogue (model: {args.dramaturg_model})...")
     print(f"      Writing {n_eps} episode script(s) with persona '{args.persona}'...")
     t0 = time.time()
 
@@ -399,10 +557,26 @@ def main():
     print(f"      Saved: {p}")
     print()
 
+    # ── Stage 6: Translate intermediate outputs to Japanese ─────
+    if not args.skip_translate:
+        current_stage += 1
+        print(f"[{current_stage}/{total_stages}] Translation: converting intermediate outputs to Japanese (model: {args.translator_model})...")
+        t0 = time.time()
+
+        translated_files = translate_intermediate_outputs(
+            run_dir=run_dir,
+            model=args.translator_model,
+            work_description=work_description,
+        )
+
+        elapsed = time.time() - t0
+        print(f"      -> {len(translated_files)} file(s) translated ({elapsed:.1f}s)")
+        print()
+
     # ── Flush thinking log ──────────────────────────────────────
     log_path = flush_log(
         run_id=run_id,
-        book_title="Discourse on the Method",
+        book_title=book_title,
         mode=args.mode,
         steps=state.get("thinking_log", []),
         concept_graph=state.get("concept_graph"),
@@ -415,12 +589,19 @@ def main():
     print("=" * 60)
     print()
     print(f"  Output directory: {run_dir}/")
-    print(f"    01_chunks.md          - Raw text chunks")
-    print(f"    02_chunk_analyses.md  - Per-chunk concept extraction")
-    print(f"    03_concept_graph.md   - Unified concept graph")
-    print(f"    04_syllabus.md        - Episode plan")
-    print(f"    05_scripts.md         - Final dialogue scripts")
-    print(f"    *.json                - Machine-readable versions")
+    print(f"    01_chunks.md              - Raw text chunks")
+    print(f"    02_chunk_analyses.md      - Per-chunk concept extraction")
+    print(f"    03_concept_graph.md       - Unified concept graph")
+    if not args.skip_research:
+        print(f"    03b_research_context.md   - Web search + reference materials")
+        print(f"    03c_critique_report.md    - Critical perspectives")
+        print(f"    03d_enriched_context.md   - Integrated context narrative")
+        print(f"    03e_reading_material.md   - Comprehensive study guide")
+    print(f"    04_syllabus.md            - Episode plan")
+    print(f"    05_scripts.md             - Final dialogue scripts")
+    if not args.skip_translate:
+        print(f"    *_ja.md                   - Japanese translations")
+    print(f"    *.json                    - Machine-readable versions")
     print()
     print(f"  Thinking log: {log_path}")
     print(f"    Contains full prompt/response pairs for every LLM call.")

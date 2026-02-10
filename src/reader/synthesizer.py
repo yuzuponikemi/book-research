@@ -11,7 +11,7 @@ from src.models import ConceptGraph
 SYNTHESIS_PROMPT = """\
 You are synthesizing multiple chunk-level philosophical analyses into a unified concept graph.
 
-Below are analyses from {chunk_count} chunks of Descartes' "Discourse on the Method".
+Below are analyses from {chunk_count} chunks of {work_description}.
 
 IMPORTANT: Preserve richness. The final graph should have 10-20 unified concepts, NOT fewer. \
 Only merge concepts that are truly the same idea. Different aspects of a broad concept \
@@ -85,9 +85,18 @@ def synthesize(state: dict) -> dict:
     if len(analyses_json) > 25000:
         analyses_json = analyses_json[:25000] + "\n... (truncated)"
 
+    book_config = state.get("book_config", {})
+    book = book_config.get("book", {})
+    pf = book_config.get("prompt_fragments", {})
+    work_description = pf.get(
+        "work_description",
+        f'{book.get("author", "the author")}\'s "{book.get("title", state.get("book_title", "this work"))}"'
+    )
+
     prompt = SYNTHESIS_PROMPT.format(
         chunk_count=len(chunk_analyses),
         analyses_json=analyses_json,
+        work_description=work_description,
     )
 
     raw_response = llm.invoke(prompt).content

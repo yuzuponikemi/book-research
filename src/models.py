@@ -30,6 +30,22 @@ class ConceptRelation(BaseModel):
     evidence: str
 
 
+class ArgumentStructure(BaseModel):
+    id: str
+    premises: list[str]
+    conclusion: str
+    argument_type: str  # "deductive" | "inductive" | "analogical"
+    source_chunk: str
+
+
+class RhetoricalStrategy(BaseModel):
+    id: str
+    strategy_type: str  # "metaphor" | "analogy" | "thought_experiment" | "appeal_to_authority"
+    description: str
+    original_quote: str
+    source_chunk: str
+
+
 class ConceptGraph(BaseModel):
     concepts: list[Concept]
     relations: list[ConceptRelation]
