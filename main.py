@@ -23,6 +23,7 @@ from src.director.enricher import enrich, format_enrichment_report
 from src.researcher.reading_material import generate_reading_material
 from src.director.planner import plan
 from src.dramaturg.scriptwriter import write_scripts
+from src.audio.synthesizer import synthesize_audio, format_audio_report
 from src.translator import translate_intermediate_outputs
 
 
@@ -305,6 +306,11 @@ def main():
         action="store_true",
         help="Skip research/critique/enrichment stages (use original pipeline only)",
     )
+    parser.add_argument(
+        "--skip-audio",
+        action="store_true",
+        help="Skip VOICEVOX audio synthesis stage",
+    )
     args = parser.parse_args()
 
     if args.mode == "topic" and not args.topic:
@@ -325,8 +331,9 @@ def main():
     # Count total stages
     base_stages = 5  # ingest, analyze, synthesize, plan, script
     research_stages = 0 if args.skip_research else 4  # research, critique, enrich, reading material
+    audio_stages = 0 if args.skip_audio else 1
     translate_stages = 0 if args.skip_translate else 1
-    total_stages = base_stages + research_stages + translate_stages
+    total_stages = base_stages + research_stages + audio_stages + translate_stages
     current_stage = 0
 
     print("=" * 60)
@@ -341,6 +348,7 @@ def main():
     if not args.skip_translate:
         print(f"  Translator   : {args.translator_model}")
     print(f"  Research     : {'skip' if args.skip_research else 'enabled'}")
+    print(f"  Audio        : {'skip' if args.skip_audio else 'VOICEVOX (localhost:50021)'}")
     if args.topic:
         print(f"  Topic        : {args.topic}")
     print(f"  Output dir   : {run_dir}")
@@ -557,7 +565,31 @@ def main():
     print(f"      Saved: {p}")
     print()
 
-    # ── Stage 6: Translate intermediate outputs to Japanese ─────
+    # ── Stage 6: Audio synthesis via VOICEVOX ──────────────────
+    if not args.skip_audio:
+        current_stage += 1
+        print(f"[{current_stage}/{total_stages}] Audio: synthesizing dialogue via VOICEVOX...")
+        t0 = time.time()
+
+        result = synthesize_audio(state, run_dir)
+        state.update(result)
+
+        elapsed = time.time() - t0
+        audio_meta = state.get("audio_metadata", [])
+        if audio_meta:
+            total_dur = sum(m.get("duration_sec", 0) for m in audio_meta)
+            total_err = sum(m.get("errors", 0) for m in audio_meta)
+            print(f"      -> {len(audio_meta)} episode(s), "
+                  f"{total_dur / 60:.1f} min total"
+                  f"{f', {total_err} errors' if total_err else ''} ({elapsed:.1f}s)")
+        else:
+            print(f"      -> skipped (VOICEVOX not available)")
+
+        p = save_readable(run_dir, "06_audio.md", format_audio_report(audio_meta))
+        print(f"      Saved: {p}")
+        print()
+
+    # ── Stage 7: Translate intermediate outputs to Japanese ─────
     if not args.skip_translate:
         current_stage += 1
         print(f"[{current_stage}/{total_stages}] Translation: converting intermediate outputs to Japanese (model: {args.translator_model})...")
@@ -599,6 +631,8 @@ def main():
         print(f"    03e_reading_material.md   - Comprehensive study guide")
     print(f"    04_syllabus.md            - Episode plan")
     print(f"    05_scripts.md             - Final dialogue scripts")
+    if not args.skip_audio:
+        print(f"    06_audio/                 - MP3 audio files (VOICEVOX)")
     if not args.skip_translate:
         print(f"    *_ja.md                   - Japanese translations")
     print(f"    *.json                    - Machine-readable versions")

@@ -12,6 +12,11 @@ presets:
       description: "The ghost of Descartes, passionate about his method, sometimes frustrated by modern misunderstandings"
       tone: "情熱的・論理的・時に皮肉"
       speaking_style: "Mixes 17th-century philosophical rigor with surprisingly modern insight"
+    voice:
+      Host: 3          # 雨晴はう（冷静・知的）
+      Descartes: 0     # 四国めたん（表現力豊か）
+      _default_a: 3
+      _default_b: 0
 
   socratic:
     persona_a:
@@ -26,6 +31,11 @@ presets:
       description: "A wise guide who reveals ideas through questions, never lectures"
       tone: "穏やか・誘導的・ソクラテス的"
       speaking_style: "Answers questions with deeper questions"
+    voice:
+      Student: 2       # 春日部つむぎ
+      Mentor: 3        # 雨晴はう
+      _default_a: 2
+      _default_b: 3
 
   debate:
     persona_a:
@@ -40,3 +50,8 @@ presets:
       description: "Rigorously challenges every claim, looking for weaknesses"
       tone: "鋭い・公平・容赦ない"
       speaking_style: "Finds counterexamples and logical gaps"
+    voice:
+      Advocate: 0      # 四国めたん
+      Critic: 1        # ずんだもん
+      _default_a: 0
+      _default_b: 1

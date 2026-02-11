@@ -105,6 +105,20 @@ class Script(BaseModel):
     closing_hook: str
 
 
+# --- Audio output ---
+
+
+class AudioEpisodeMetadata(BaseModel):
+    episode_number: int
+    title: str
+    file: str | None
+    duration_sec: float
+    file_size_bytes: int
+    lines_synthesized: int
+    errors: int
+    synthesis_time_sec: float
+
+
 # --- LangGraph State ---
 
 
@@ -118,6 +132,7 @@ class CogitoState(TypedDict):
     persona_config: dict
     syllabus: dict
     scripts: list[dict]
+    audio_metadata: list[dict]
     thinking_log: list[dict]
     reader_model: str
     dramaturg_model: str
