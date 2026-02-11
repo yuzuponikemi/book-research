@@ -123,16 +123,30 @@ class AudioEpisodeMetadata(BaseModel):
 
 
 class CogitoState(TypedDict):
+    # Configuration
+    book_config: dict
     book_title: str
-    raw_chunks: list[str]
-    chunk_analyses: list[dict]
-    concept_graph: dict
     mode: str
     topic: str | None
     persona_config: dict
+    reader_model: str
+    dramaturg_model: str
+    
+    # Flags
+    skip_research: bool
+    skip_audio: bool
+
+    # Data Artifacts
+    raw_chunks: list[str]
+    chunk_analyses: list[dict]
+    concept_graph: dict
+    research_context: dict
+    critique_report: dict
+    enrichment: dict
+    reading_material: str
     syllabus: dict
     scripts: list[dict]
     audio_metadata: list[dict]
+    
+    # Logging
     thinking_log: list[dict]
-    reader_model: str
-    dramaturg_model: str
