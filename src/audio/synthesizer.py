@@ -49,24 +49,26 @@ def _wav_bytes_to_segment(wav_bytes: bytes) -> AudioSegment:
     return AudioSegment.from_wav(io.BytesIO(wav_bytes))
 
 
-def _synthesize_line(client: VoicevoxClient, text: str, speaker_id: int) -> AudioSegment | None:
+def _synthesize_line(client: VoicevoxClient, text: str, speaker_id: int, speed_scale: float = 1.3, intonation_scale: float = 1.5) -> AudioSegment | None:
     """Synthesize a single line of text, returning AudioSegment or None on error."""
     text = text.strip()
     if not text:
         return None
     try:
-        wav_data = client.synthesize(text, speaker_id)
+        wav_data = client.synthesize(text, speaker_id, speed_scale=speed_scale, intonation_scale=intonation_scale)
         return _wav_bytes_to_segment(wav_data)
     except Exception:
         return None
 
 
-def synthesize_audio(state: dict, run_dir: Path) -> dict:
+def synthesize_audio(state: dict, run_dir: Path, speed_scale: float = 1.3, intonation_scale: float = 1.5) -> dict:
     """Pipeline function: convert scripts to MP3 audio files via VOICEVOX.
 
     Args:
         state: Pipeline state with scripts and persona_config.
         run_dir: Path to the current run directory.
+        speed_scale: VOICEVOX speedScale (1.0 = normal, 1.3 = faster).
+        intonation_scale: VOICEVOX intonationScale (1.0 = normal, higher = more expressive).
 
     Returns:
         Dict with audio_metadata and updated thinking_log.
@@ -117,7 +119,7 @@ def synthesize_audio(state: dict, run_dir: Path) -> dict:
         # Opening bridge
         opening = script.get("opening_bridge", "")
         if opening:
-            seg = _synthesize_line(client, opening, narrator_id)
+            seg = _synthesize_line(client, opening, narrator_id, speed_scale, intonation_scale)
             if seg:
                 episode_audio += seg
                 episode_audio += AudioSegment.silent(duration=SILENCE_SECTION_MS)
@@ -145,7 +147,7 @@ def synthesize_audio(state: dict, run_dir: Path) -> dict:
                 else:
                     episode_audio += AudioSegment.silent(duration=SILENCE_SPEAKER_CHANGE_MS)
 
-            seg = _synthesize_line(client, line_text, speaker_id)
+            seg = _synthesize_line(client, line_text, speaker_id, speed_scale, intonation_scale)
             if seg:
                 episode_audio += seg
                 line_count += 1
@@ -158,7 +160,7 @@ def synthesize_audio(state: dict, run_dir: Path) -> dict:
         closing = script.get("closing_hook", "")
         if closing:
             episode_audio += AudioSegment.silent(duration=SILENCE_SECTION_MS)
-            seg = _synthesize_line(client, closing, narrator_id)
+            seg = _synthesize_line(client, closing, narrator_id, speed_scale, intonation_scale)
             if seg:
                 episode_audio += seg
                 line_count += 1

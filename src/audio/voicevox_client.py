@@ -48,9 +48,11 @@ class VoicevoxClient:
         resp.raise_for_status()
         return resp.content
 
-    def synthesize(self, text: str, speaker_id: int) -> bytes:
+    def synthesize(self, text: str, speaker_id: int, speed_scale: float = 1.3, intonation_scale: float = 1.5) -> bytes:
         """Convenience method: text -> WAV bytes (audio_query + synthesis)."""
         query = self.audio_query(text, speaker_id)
+        query["speedScale"] = speed_scale
+        query["intonationScale"] = intonation_scale
         return self.synthesis(query, speaker_id)
 
 
