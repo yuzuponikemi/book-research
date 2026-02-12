@@ -102,6 +102,26 @@ def translate_text(text: str, model: str = "translategemma:12b",
     return "\n\n".join(translated_parts)
 
 
+def translate_node(state: dict) -> dict:
+    """LangGraph node: translate intermediate outputs to Japanese."""
+    from pathlib import Path
+
+    run_dir = Path(state["run_dir"])
+    model = state.get("translator_model", "translategemma:12b")
+    work_description = state.get("work_description", "")
+
+    saved = translate_intermediate_outputs(run_dir, model, work_description)
+
+    steps = list(state.get("thinking_log", []))
+    steps.append({
+        "layer": "translator",
+        "node": "translate",
+        "action": "translate_intermediate_outputs",
+        "reasoning": f"Translated {len(saved)} file(s) to Japanese",
+    })
+    return {"thinking_log": steps}
+
+
 def translate_intermediate_outputs(
     run_dir: "Path",
     model: str = "translategemma:12b",

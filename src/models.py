@@ -131,10 +131,17 @@ class CogitoState(TypedDict):
     persona_config: dict
     reader_model: str
     dramaturg_model: str
-    
+    translator_model: str
+    work_description: str
+
+    # Run metadata (str because Path is not serialisable)
+    run_dir: str
+    run_id: str
+
     # Flags
     skip_research: bool
     skip_audio: bool
+    skip_translate: bool
 
     # Data Artifacts
     raw_chunks: list[str]
@@ -147,6 +154,6 @@ class CogitoState(TypedDict):
     syllabus: dict
     scripts: list[dict]
     audio_metadata: list[dict]
-    
+
     # Logging
     thinking_log: list[dict]

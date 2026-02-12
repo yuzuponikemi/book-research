@@ -13,6 +13,7 @@ from src.researcher.reading_material import generate_reading_material
 from src.director.planner import plan
 from src.dramaturg.scriptwriter import write_scripts
 from src.audio.synthesizer import synthesize_audio
+from src.translator import translate_node
 
 
 def should_research(state: CogitoState) -> str:
@@ -25,20 +26,35 @@ def should_research(state: CogitoState) -> str:
 def should_audio(state: CogitoState) -> str:
     """Condition for audio synthesis stage."""
     if state.get("skip_audio", False):
-        return END
+        return "check_translate"
     return "synthesize_audio"
 
 
-def build_graph() -> StateGraph:
+def should_translate(state: CogitoState) -> str:
+    """Condition for translation stage."""
+    if state.get("skip_translate", False):
+        return END
+    return "translate"
+
+
+def _check_translate_noop(state: CogitoState) -> dict:
+    """No-op routing junction between audio and translate."""
+    return {}
+
+
+def build_graph(checkpointer=None):
     """Build the full Cogito pipeline graph.
 
     Topology:
-        ingest → analyze_chunks → synthesize 
+        ingest → analyze_chunks → synthesize
           → (if not skip_research) → research → critique → enrich → generate_reading_material → plan
           → (if skip_research) → plan
-        plan → write_scripts 
-          → (if not skip_audio) → synthesize_audio → END
-          → (if skip_audio) → END
+        plan → write_scripts
+          → (if not skip_audio) → synthesize_audio → check_translate
+          → (if skip_audio) → check_translate
+        check_translate
+          → (if not skip_translate) → translate → END
+          → (if skip_translate) → END
     """
     graph = StateGraph(CogitoState)
 
@@ -60,19 +76,23 @@ def build_graph() -> StateGraph:
     graph.add_node("write_scripts", write_scripts)
     graph.add_node("synthesize_audio", synthesize_audio)
 
+    # --- Layer 5: Post-processing ---
+    graph.add_node("check_translate", _check_translate_noop)
+    graph.add_node("translate", translate_node)
+
     # --- Edges ---
     graph.set_entry_point("ingest")
     graph.add_edge("ingest", "analyze_chunks")
     graph.add_edge("analyze_chunks", "synthesize")
-    
+
     # Conditional branching for Research
     graph.add_conditional_edges(
         "synthesize",
         should_research,
         {
             "research": "research",
-            "plan": "plan"
-        }
+            "plan": "plan",
+        },
     )
 
     # Research loop
@@ -90,10 +110,22 @@ def build_graph() -> StateGraph:
         should_audio,
         {
             "synthesize_audio": "synthesize_audio",
-            END: END
-        }
+            "check_translate": "check_translate",
+        },
     )
 
-    graph.add_edge("synthesize_audio", END)
+    graph.add_edge("synthesize_audio", "check_translate")
 
-    return graph.compile()
+    # Conditional branching for Translation
+    graph.add_conditional_edges(
+        "check_translate",
+        should_translate,
+        {
+            "translate": "translate",
+            END: END,
+        },
+    )
+
+    graph.add_edge("translate", END)
+
+    return graph.compile(checkpointer=checkpointer)

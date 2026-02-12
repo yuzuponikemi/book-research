@@ -1,68 +1,42 @@
 """CLI entry point for Project Cogito.
 
-Runs the pipeline step-by-step, saving human-readable intermediate outputs
-after each stage so you can review and debug the process.
+Runs the LangGraph pipeline with SQLite checkpointing, saving human-readable
+intermediate outputs after each stage.  Supports --resume and --from-node for
+mid-pipeline restarts.
 """
 
 import argparse
 import json
+import sqlite3
 import sys
 import time
 from pathlib import Path
 
 import yaml
 
+from langgraph.checkpoint.sqlite import SqliteSaver
+
 from src.book_config import load_book_config
+from src.graph import build_graph
 from src.logger import flush_log, make_run_id
-from src.reader.ingestion import ingest
-from src.reader.analyst import analyze_chunks
-from src.reader.synthesizer import synthesize
-from src.researcher.researcher import research, format_research_context
-from src.critic.critic import critique, format_critique_report
-from src.director.enricher import enrich, format_enrichment_report
-from src.researcher.reading_material import generate_reading_material
-from src.director.planner import plan
-from src.dramaturg.scriptwriter import write_scripts
-from src.audio.synthesizer import synthesize_audio, format_audio_report
-from src.translator import translate_intermediate_outputs
+from src.audio.synthesizer import format_audio_report
+from src.researcher.researcher import format_research_context
+from src.critic.critic import format_critique_report
+from src.director.enricher import format_enrichment_report
 
 
 CONFIG_DIR = Path(__file__).parent / "config"
 DATA_DIR = Path(__file__).parent / "data"
 
-
-def load_persona_config(preset_name: str) -> dict:
-    """Load a persona preset from config/personas.yaml."""
-    personas_path = CONFIG_DIR / "personas.yaml"
-    with open(personas_path) as f:
-        config = yaml.safe_load(f)
-
-    presets = config.get("presets", {})
-    if preset_name not in presets:
-        available = ", ".join(presets.keys())
-        print(f"Error: Unknown persona preset '{preset_name}'")
-        print(f"Available presets: {available}")
-        sys.exit(1)
-
-    return presets[preset_name]
+# Thread ID used for LangGraph checkpointer (one graph execution per run).
+THREAD_ID = "cogito"
 
 
-def save_intermediate(run_dir: Path, stage: str, data: dict) -> Path:
-    """Save intermediate output as pretty-printed JSON."""
-    path = run_dir / f"{stage}.json"
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
-    return path
-
-
-def save_readable(run_dir: Path, filename: str, text: str) -> Path:
-    """Save a human-readable text file."""
-    path = run_dir / filename
-    path.write_text(text, encoding="utf-8")
-    return path
-
+# ---------------------------------------------------------------------------
+# Format helpers (produce .md content from node output)
+# ---------------------------------------------------------------------------
 
 def format_chunks_report(chunks: list[str]) -> str:
-    """Create a human-readable report of the text chunks."""
     lines = ["# Ingestion Report", ""]
     lines.append(f"Total chunks: {len(chunks)}")
     lines.append("")
@@ -70,7 +44,6 @@ def format_chunks_report(chunks: list[str]) -> str:
         first_line = chunk.strip().split("\n")[0]
         lines.append(f"## Chunk {i+1}: {first_line}")
         lines.append(f"Length: {len(chunk)} characters, ~{len(chunk.split())} words")
-        # Show first 300 chars as preview
         preview = chunk[:300].replace("\n", "\n> ")
         lines.append(f"\n> {preview}...")
         lines.append("")
@@ -78,7 +51,6 @@ def format_chunks_report(chunks: list[str]) -> str:
 
 
 def format_analysis_report(analyses: list[dict]) -> str:
-    """Create a human-readable report of per-chunk analyses."""
     lines = ["# Chunk Analysis Report", ""]
     for i, analysis in enumerate(analyses):
         concepts = analysis.get("concepts", [])
@@ -100,7 +72,7 @@ def format_analysis_report(analyses: list[dict]) -> str:
                 lines.append(f"- **{c.get('name', '?')}** (`{c.get('id', '?')}`)")
                 lines.append(f"  {c.get('description', '')[:120]}")
                 for q in c.get("original_quotes", [])[:2]:
-                    lines.append(f"  > \"{q[:100]}\"")
+                    lines.append(f'  > "{q[:100]}"')
             lines.append("")
 
         if aporias:
@@ -132,12 +104,12 @@ def format_analysis_report(analyses: list[dict]) -> str:
                 lines.append(f"- **{rs.get('strategy_type', '?')}** (`{rs.get('id', '?')}`)")
                 lines.append(f"  {rs.get('description', '')[:120]}")
                 if rs.get("original_quote"):
-                    lines.append(f"  > \"{rs['original_quote'][:100]}\"")
+                    lines.append(f'  > "{rs["original_quote"][:100]}"')
             lines.append("")
 
         logic = analysis.get("logic_flow", "")
         if logic:
-            lines.append(f"### Logic Flow")
+            lines.append("### Logic Flow")
             lines.append(logic[:500])
             lines.append("")
 
@@ -147,9 +119,7 @@ def format_analysis_report(analyses: list[dict]) -> str:
 
 
 def format_concept_graph_report(cg: dict) -> str:
-    """Create a human-readable concept graph report."""
     lines = ["# Unified Concept Graph", ""]
-
     concepts = cg.get("concepts", [])
     relations = cg.get("relations", [])
     aporias = cg.get("aporias", [])
@@ -173,7 +143,7 @@ def format_concept_graph_report(cg: dict) -> str:
             lines.append(f"### {c.get('name', '?')} (`{c.get('id', '?')}`) [from {c.get('source_chunk', '?')}]")
             lines.append(c.get("description", ""))
             for q in c.get("original_quotes", []):
-                lines.append(f"> \"{q}\"")
+                lines.append(f'> "{q}"')
             lines.append("")
 
     if relations:
@@ -197,7 +167,6 @@ def format_concept_graph_report(cg: dict) -> str:
 
 
 def format_syllabus_report(syllabus: dict) -> str:
-    """Create a human-readable syllabus report."""
     lines = ["# Syllabus", ""]
     lines.append(f"Mode: {syllabus.get('mode', '?')}")
     lines.append(f"Meta-narrative: {syllabus.get('meta_narrative', '')}")
@@ -209,7 +178,7 @@ def format_syllabus_report(syllabus: dict) -> str:
             continue
         lines.append(f"## Episode {ep.get('episode_number', '?')}: {ep.get('title', '?')}")
         lines.append(f"**Theme:** {ep.get('theme', '')}")
-        concept_ids = ep.get('concept_ids', [])
+        concept_ids = ep.get("concept_ids", [])
         if isinstance(concept_ids, list):
             lines.append(f"**Concepts:** {', '.join(str(c) for c in concept_ids)}")
         lines.append(f"**Aporias:** {', '.join(str(a) for a in ep.get('aporia_ids', []) if isinstance(ep.get('aporia_ids'), list))}")
@@ -221,12 +190,10 @@ def format_syllabus_report(syllabus: dict) -> str:
 
 
 def format_scripts_report(scripts: list[dict]) -> str:
-    """Create a human-readable scripts report."""
     lines = ["# Generated Scripts", ""]
-
     for script in scripts:
         if not isinstance(script, dict):
-            lines.append(f"(skipped non-dict script)")
+            lines.append("(skipped non-dict script)")
             continue
         lines.append(f"## Episode {script.get('episode_number', '?')}: {script.get('title', '?')}")
         lines.append("")
@@ -252,94 +219,325 @@ def format_scripts_report(scripts: list[dict]) -> str:
 
         lines.append("---")
         lines.append("")
-
     return "\n".join(lines)
 
+
+# ---------------------------------------------------------------------------
+# Node metadata: label, file prefix, save callback
+# ---------------------------------------------------------------------------
+
+def _save(run_dir: Path, prefix: str, data, fmt_fn=None):
+    """Save JSON + optional .md for a node's output."""
+    json_path = run_dir / f"{prefix}.json"
+    json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    if fmt_fn:
+        md_path = run_dir / f"{prefix}.md"
+        md_path.write_text(fmt_fn(data), encoding="utf-8")
+        return md_path
+    return json_path
+
+
+# Each entry:  (label, file_prefix, state_key, format_fn, summary_fn)
+# summary_fn(state_snapshot) -> str  (one-line summary printed after the node)
+NODE_META: dict[str, tuple] = {
+    "ingest": (
+        "Ingestion",
+        "01_chunks",
+        "raw_chunks",
+        lambda data: format_chunks_report(data) if isinstance(data, list) else "",
+        lambda s: f"{len(s.get('raw_chunks', []))} chunks",
+    ),
+    "analyze_chunks": (
+        "Chunk Analysis",
+        "02_chunk_analyses",
+        "chunk_analyses",
+        format_analysis_report,
+        lambda s: (
+            f"{sum(len(a.get('concepts',[])) for a in s.get('chunk_analyses',[]))} concepts, "
+            f"{sum(len(a.get('aporias',[])) for a in s.get('chunk_analyses',[]))} aporias"
+        ),
+    ),
+    "synthesize": (
+        "Synthesis",
+        "03_concept_graph",
+        "concept_graph",
+        format_concept_graph_report,
+        lambda s: (
+            f"{len(s.get('concept_graph',{}).get('concepts',[]))} concepts, "
+            f"{len(s.get('concept_graph',{}).get('relations',[]))} relations"
+        ),
+    ),
+    "research": (
+        "Research",
+        "03b_research_context",
+        "research_context",
+        format_research_context,
+        lambda s: (
+            f"{len(s.get('research_context',{}).get('web_sources',[]))} web sources, "
+            f"{len(s.get('research_context',{}).get('reference_files',[]))} refs"
+        ),
+    ),
+    "critique": (
+        "Critique",
+        "03c_critique_report",
+        "critique_report",
+        format_critique_report,
+        lambda s: (
+            f"{len(s.get('critique_report',{}).get('critiques',[]))} critiques"
+        ),
+    ),
+    "enrich": (
+        "Enrichment",
+        "03d_enriched_context",
+        "enrichment",
+        format_enrichment_report,
+        lambda s: (
+            f"EN {len(s.get('enrichment',{}).get('enrichment_summary',''))} chars, "
+            f"JA {len(s.get('enrichment',{}).get('enrichment_summary_ja',''))} chars"
+        ),
+    ),
+    "generate_reading_material": (
+        "Reading Material",
+        "03e_reading_material",
+        "reading_material",
+        lambda data: data if isinstance(data, str) else "",
+        lambda s: f"{len(s.get('reading_material',''))} chars",
+    ),
+    "plan": (
+        "Planning",
+        "04_syllabus",
+        "syllabus",
+        format_syllabus_report,
+        lambda s: f"{len(s.get('syllabus',{}).get('episodes',[]))} episodes",
+    ),
+    "write_scripts": (
+        "Scriptwriting",
+        "05_scripts",
+        "scripts",
+        format_scripts_report,
+        lambda s: (
+            f"{len(s.get('scripts',[]))} scripts, "
+            f"{sum(len(sc.get('dialogue',[])) for sc in s.get('scripts',[]))} lines"
+        ),
+    ),
+    "synthesize_audio": (
+        "Audio Synthesis",
+        "06_audio",
+        "audio_metadata",
+        format_audio_report,
+        lambda s: (
+            f"{len(s.get('audio_metadata',[]))} episodes"
+            if s.get("audio_metadata") else "skipped"
+        ),
+    ),
+    "check_translate": (
+        "Check Translate",
+        None,
+        None,
+        None,
+        lambda s: "",
+    ),
+    "translate": (
+        "Translation",
+        None,  # translate_node writes files directly
+        None,
+        None,
+        lambda s: "done",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Node ordering helpers (for --from-node)
+# ---------------------------------------------------------------------------
+
+# Canonical node order (all nodes in the graph).
+ALL_NODES_ORDERED = [
+    "ingest",
+    "analyze_chunks",
+    "synthesize",
+    "research",
+    "critique",
+    "enrich",
+    "generate_reading_material",
+    "plan",
+    "write_scripts",
+    "synthesize_audio",
+    "check_translate",
+    "translate",
+]
+
+
+def _build_active_sequence(state: dict) -> list[str]:
+    """Return the list of nodes that were/will actually execute given skip flags."""
+    skip_research = state.get("skip_research", False)
+    skip_audio = state.get("skip_audio", False)
+    skip_translate = state.get("skip_translate", False)
+
+    seq = ["ingest", "analyze_chunks", "synthesize"]
+    if not skip_research:
+        seq += ["research", "critique", "enrich", "generate_reading_material"]
+    seq.append("plan")
+    seq.append("write_scripts")
+    if not skip_audio:
+        seq.append("synthesize_audio")
+    seq.append("check_translate")
+    if not skip_translate:
+        seq.append("translate")
+    return seq
+
+
+def _predecessor(node: str, active_seq: list[str]) -> str | None:
+    """Return the node just before *node* in the active sequence."""
+    try:
+        idx = active_seq.index(node)
+    except ValueError:
+        return None
+    return active_seq[idx - 1] if idx > 0 else None
+
+
+# ---------------------------------------------------------------------------
+# Persona loader
+# ---------------------------------------------------------------------------
+
+def load_persona_config(preset_name: str) -> dict:
+    personas_path = CONFIG_DIR / "personas.yaml"
+    with open(personas_path) as f:
+        config = yaml.safe_load(f)
+
+    presets = config.get("presets", {})
+    if preset_name not in presets:
+        available = ", ".join(presets.keys())
+        print(f"Error: Unknown persona preset '{preset_name}'")
+        print(f"Available presets: {available}")
+        sys.exit(1)
+
+    return presets[preset_name]
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(
         description="Project Cogito: Philosophical text -> podcast scripts"
     )
     parser.add_argument(
-        "--book",
-        default="descartes_discourse",
+        "--book", default="descartes_discourse",
         help="Book config name from config/books/ (default: descartes_discourse)",
     )
     parser.add_argument(
-        "--mode",
-        choices=["essence", "curriculum", "topic"],
-        default="essence",
+        "--mode", choices=["essence", "curriculum", "topic"], default="essence",
         help="Episode planning mode (default: essence)",
     )
     parser.add_argument(
-        "--persona",
-        default="descartes_default",
+        "--persona", default="descartes_default",
         help="Persona preset name from config/personas.yaml (default: descartes_default)",
     )
+    parser.add_argument("--topic", default=None, help="Topic to focus on (required for topic mode)")
     parser.add_argument(
-        "--topic",
-        default=None,
-        help="Topic to focus on (required for topic mode)",
-    )
-    parser.add_argument(
-        "--reader-model",
-        default="llama3",
+        "--reader-model", default="llama3",
         help="Ollama model for Reader/Director layers (default: llama3)",
     )
     parser.add_argument(
-        "--dramaturg-model",
-        default="qwen3-next",
+        "--dramaturg-model", default="qwen3-next",
         help="Ollama model for Dramaturg layer (default: qwen3-next)",
     )
     parser.add_argument(
-        "--translator-model",
-        default="translategemma:12b",
+        "--translator-model", default="translategemma:12b",
         help="Ollama model for Japanese translation (default: translategemma:12b)",
     )
+    parser.add_argument("--skip-translate", action="store_true", help="Skip the translation step")
+    parser.add_argument("--skip-research", action="store_true", help="Skip research/critique/enrichment stages")
+    parser.add_argument("--skip-audio", action="store_true", help="Skip VOICEVOX audio synthesis stage")
     parser.add_argument(
-        "--skip-translate",
-        action="store_true",
-        help="Skip the translation step",
+        "--resume", metavar="RUN_ID", default=None,
+        help="Resume from a previous run's checkpoint (e.g. run_20250210_153000)",
     )
     parser.add_argument(
-        "--skip-research",
-        action="store_true",
-        help="Skip research/critique/enrichment stages (use original pipeline only)",
-    )
-    parser.add_argument(
-        "--skip-audio",
-        action="store_true",
-        help="Skip VOICEVOX audio synthesis stage",
+        "--from-node", metavar="NODE", default=None,
+        help="Re-execute from this node onward (requires --resume)",
     )
     args = parser.parse_args()
 
     if args.mode == "topic" and not args.topic:
         parser.error("--topic is required when using topic mode")
+    if args.from_node and not args.resume:
+        parser.error("--from-node requires --resume")
+    if args.from_node and args.from_node not in ALL_NODES_ORDERED:
+        parser.error(f"Unknown node '{args.from_node}'. "
+                     f"Valid nodes: {', '.join(ALL_NODES_ORDERED)}")
 
-    # Load book configuration
-    book_config = load_book_config(args.book)
-    book = book_config["book"]
-    book_title = book["title"]
-
-    persona_config = load_persona_config(args.persona)
-    run_id = make_run_id()
-
-    # Create per-run output directory
+    # --- Determine run_id and run_dir ---
+    resuming = args.resume is not None
+    run_id = args.resume if resuming else make_run_id()
     run_dir = DATA_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Count total stages
+    # --- Load configs ---
+    book_config = load_book_config(args.book)
+    book = book_config["book"]
+    book_title = book["title"]
+    persona_config = load_persona_config(args.persona)
+
+    pf = book_config.get("prompt_fragments", {})
+    work_description = pf.get(
+        "work_description",
+        f'{book.get("author", "the author")}\'s "{book_title}"',
+    )
+
+    # --- Build checkpointer and graph ---
+    db_path = run_dir / "checkpoint.sqlite"
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
+    checkpointer = SqliteSaver(conn)
+    graph = build_graph(checkpointer=checkpointer)
+
+    config = {"configurable": {"thread_id": THREAD_ID}}
+
+    # --- Initial state (for fresh runs) ---
+    initial_state = {
+        "book_title": book_title,
+        "book_config": book_config,
+        "raw_chunks": [],
+        "chunk_analyses": [],
+        "concept_graph": {},
+        "research_context": {},
+        "critique_report": {},
+        "enrichment": {},
+        "reading_material": "",
+        "mode": args.mode,
+        "topic": args.topic,
+        "persona_config": persona_config,
+        "syllabus": {},
+        "scripts": [],
+        "audio_metadata": [],
+        "thinking_log": [],
+        "reader_model": args.reader_model,
+        "dramaturg_model": args.dramaturg_model,
+        "translator_model": args.translator_model,
+        "work_description": work_description,
+        "skip_research": args.skip_research,
+        "skip_audio": args.skip_audio,
+        "skip_translate": args.skip_translate,
+        "run_dir": str(run_dir),
+        "run_id": run_id,
+    }
+
+    # --- Count expected stages for progress display ---
     base_stages = 5  # ingest, analyze, synthesize, plan, script
-    research_stages = 0 if args.skip_research else 4  # research, critique, enrich, reading material
+    research_stages = 0 if args.skip_research else 4
     audio_stages = 0 if args.skip_audio else 1
     translate_stages = 0 if args.skip_translate else 1
     total_stages = base_stages + research_stages + audio_stages + translate_stages
-    current_stage = 0
 
+    # --- Banner ---
     print("=" * 60)
     print("  Project Cogito")
     print("=" * 60)
     print(f"  Run ID       : {run_id}")
+    if resuming:
+        print(f"  Resuming     : yes{f' (from {args.from_node})' if args.from_node else ''}")
     print(f"  Book         : {book_title} ({book.get('author', '')})")
     print(f"  Mode         : {args.mode}")
     print(f"  Persona      : {args.persona}")
@@ -352,270 +550,108 @@ def main():
     if args.topic:
         print(f"  Topic        : {args.topic}")
     print(f"  Output dir   : {run_dir}")
+    print(f"  Checkpoint   : {db_path}")
     print("=" * 60)
     print()
 
-    # Build work_description for translator
-    pf = book_config.get("prompt_fragments", {})
-    work_description = pf.get(
-        "work_description",
-        f'{book.get("author", "the author")}\'s "{book_title}"'
-    )
-
-    # Shared state that accumulates through the pipeline
-    state = {
-        "book_title": book_title,
-        "book_config": book_config,
-        "raw_chunks": [],
-        "chunk_analyses": [],
-        "concept_graph": {},
-        "research_context": {},
-        "critique_report": {},
-        "enrichment": {},
-        "mode": args.mode,
-        "topic": args.topic,
-        "persona_config": persona_config,
-        "syllabus": {},
-        "scripts": [],
-        "thinking_log": [],
-        "reader_model": args.reader_model,
-        "dramaturg_model": args.dramaturg_model,
-    }
-
-    # ── Stage 1: Ingest ─────────────────────────────────────────
-    current_stage += 1
-    print(f"[{current_stage}/{total_stages}] Ingestion: downloading and chunking text...")
-    t0 = time.time()
-
-    result = ingest(state)
-    state.update(result)
-
-    elapsed = time.time() - t0
-    n_chunks = len(state["raw_chunks"])
-    print(f"      -> {n_chunks} chunks in {elapsed:.1f}s")
-
-    # Save intermediate
-    save_intermediate(run_dir, "01_chunks", {
-        "chunk_count": n_chunks,
-        "chunks": [
-            {"index": i, "first_line": c.split("\n")[0], "length": len(c)}
-            for i, c in enumerate(state["raw_chunks"])
-        ],
-    })
-    p = save_readable(run_dir, "01_chunks.md", format_chunks_report(state["raw_chunks"]))
-    print(f"      Saved: {p}")
-    print()
-
-    # ── Stage 2: Analyze chunks ─────────────────────────────────
-    current_stage += 1
-    print(f"[{current_stage}/{total_stages}] Analysis: extracting concepts from {n_chunks} chunks (model: {args.reader_model})...")
-    print(f"      This will make {n_chunks} LLM calls — may take a while.")
-    t0 = time.time()
-
-    result = analyze_chunks(state)
-    state.update(result)
-
-    elapsed = time.time() - t0
-    total_concepts = sum(len(a.get("concepts", [])) for a in state["chunk_analyses"])
-    total_aporias = sum(len(a.get("aporias", [])) for a in state["chunk_analyses"])
-    total_arguments = sum(len(a.get("arguments", [])) for a in state["chunk_analyses"])
-    print(f"      -> {total_concepts} concepts, {total_aporias} aporias, "
-          f"{total_arguments} arguments across all chunks ({elapsed:.1f}s)")
-
-    save_intermediate(run_dir, "02_chunk_analyses", state["chunk_analyses"])
-    p = save_readable(run_dir, "02_chunk_analyses.md", format_analysis_report(state["chunk_analyses"]))
-    print(f"      Saved: {p}")
-    print()
-
-    # ── Stage 3: Synthesize ─────────────────────────────────────
-    current_stage += 1
-    print(f"[{current_stage}/{total_stages}] Synthesis: merging chunk analyses into unified concept graph...")
-    t0 = time.time()
-
-    result = synthesize(state)
-    state.update(result)
-
-    elapsed = time.time() - t0
-    cg = state["concept_graph"]
-    print(f"      -> {len(cg.get('concepts', []))} concepts, "
-          f"{len(cg.get('relations', []))} relations, "
-          f"{len(cg.get('aporias', []))} aporias ({elapsed:.1f}s)")
-    if cg.get("core_frustration"):
-        print(f"      Core frustration: {cg['core_frustration'][:100]}")
-
-    save_intermediate(run_dir, "03_concept_graph", cg)
-    p = save_readable(run_dir, "03_concept_graph.md", format_concept_graph_report(cg))
-    print(f"      Saved: {p}")
-    print()
-
-    # ── Stage 3b: Research (optional) ────────────────────────────
-    if not args.skip_research:
-        current_stage += 1
-        print(f"[{current_stage}/{total_stages}] Research: gathering web search results and reference materials...")
-        t0 = time.time()
-
-        result = research(state)
-        state.update(result)
-
-        elapsed = time.time() - t0
-        rc = state["research_context"]
-        n_sources = len(rc.get("web_sources", []))
-        n_refs = len(rc.get("reference_files", []))
-        print(f"      -> {n_sources} web sources, {n_refs} reference files ({elapsed:.1f}s)")
-
-        save_intermediate(run_dir, "03b_research_context", rc)
-        p = save_readable(run_dir, "03b_research_context.md", format_research_context(rc))
-        print(f"      Saved: {p}")
-        print()
-
-        # ── Stage 3c: Critique ───────────────────────────────────
-        current_stage += 1
-        print(f"[{current_stage}/{total_stages}] Critique: generating critical perspectives...")
-        t0 = time.time()
-
-        result = critique(state)
-        state.update(result)
-
-        elapsed = time.time() - t0
-        cr = state["critique_report"]
-        n_critiques = len(cr.get("critiques", []))
-        n_debates = len(cr.get("overarching_debates", []))
-        print(f"      -> {n_critiques} concept critiques, {n_debates} overarching debates ({elapsed:.1f}s)")
-
-        save_intermediate(run_dir, "03c_critique_report", cr)
-        p = save_readable(run_dir, "03c_critique_report.md", format_critique_report(cr))
-        print(f"      Saved: {p}")
-        print()
-
-        # ── Stage 3d: Enrich ─────────────────────────────────────
-        current_stage += 1
-        print(f"[{current_stage}/{total_stages}] Enrichment: creating integrated context summaries...")
-        t0 = time.time()
-
-        result = enrich(state)
-        state.update(result)
-
-        elapsed = time.time() - t0
-        enrichment = state["enrichment"]
-        en_len = len(enrichment.get("enrichment_summary", ""))
-        ja_len = len(enrichment.get("enrichment_summary_ja", ""))
-        print(f"      -> EN summary: {en_len} chars, JA summary: {ja_len} chars ({elapsed:.1f}s)")
-
-        save_intermediate(run_dir, "03d_enriched_context", enrichment)
-        p = save_readable(run_dir, "03d_enriched_context.md", format_enrichment_report(enrichment))
-        print(f"      Saved: {p}")
-        print()
-
-        # ── Stage 3e: Reading Material ──────────────────────────────
-        current_stage += 1
-        print(f"[{current_stage}/{total_stages}] Reading Material: generating comprehensive study guide...")
-        t0 = time.time()
-
-        result = generate_reading_material(state)
-        state.update(result)
-
-        elapsed = time.time() - t0
-        rm_text = state.get("reading_material", "")
-        print(f"      -> {len(rm_text)} chars ({elapsed:.1f}s)")
-
-        p = save_readable(run_dir, "03e_reading_material.md", rm_text)
-        print(f"      Saved: {p}")
-        print()
-
-    # ── Stage 4: Plan ───────────────────────────────────────────
-    current_stage += 1
-    print(f"[{current_stage}/{total_stages}] Planning: generating syllabus ({args.mode} mode)...")
-    t0 = time.time()
-
-    result = plan(state)
-    state.update(result)
-
-    elapsed = time.time() - t0
-    syllabus = state["syllabus"]
-    episodes = syllabus.get("episodes", [])
-    n_eps = len(episodes)
-    print(f"      -> {n_eps} episode(s) ({elapsed:.1f}s)")
-    for ep in episodes:
-        if isinstance(ep, dict):
-            print(f"         Ep{ep.get('episode_number', '?')}: {ep.get('title', '?')}")
+    # --- Handle --from-node: rewind checkpoint to predecessor ---
+    stream_input: dict | None
+    if resuming and args.from_node:
+        active_seq = _build_active_sequence(initial_state)
+        prev = _predecessor(args.from_node, active_seq)
+        if prev is None:
+            # Re-running from the very first node — pass initial state
+            stream_input = initial_state
+            print(f"  Restarting from beginning (first node: {args.from_node})")
         else:
-            print(f"         (unexpected format: {str(ep)[:80]})")
-
-    save_intermediate(run_dir, "04_syllabus", syllabus)
-    p = save_readable(run_dir, "04_syllabus.md", format_syllabus_report(syllabus))
-    print(f"      Saved: {p}")
-    print()
-
-    # ── Stage 5: Write scripts ──────────────────────────────────
-    current_stage += 1
-    print(f"[{current_stage}/{total_stages}] Scriptwriting: generating dialogue (model: {args.dramaturg_model})...")
-    print(f"      Writing {n_eps} episode script(s) with persona '{args.persona}'...")
-    t0 = time.time()
-
-    result = write_scripts(state)
-    state.update(result)
-
-    elapsed = time.time() - t0
-    scripts = state["scripts"]
-    total_lines = sum(len(s.get("dialogue", [])) for s in scripts)
-    print(f"      -> {len(scripts)} script(s), {total_lines} total dialogue lines ({elapsed:.1f}s)")
-
-    save_intermediate(run_dir, "05_scripts", scripts)
-    p = save_readable(run_dir, "05_scripts.md", format_scripts_report(scripts))
-    print(f"      Saved: {p}")
-    print()
-
-    # ── Stage 6: Audio synthesis via VOICEVOX ──────────────────
-    if not args.skip_audio:
-        current_stage += 1
-        print(f"[{current_stage}/{total_stages}] Audio: synthesizing dialogue via VOICEVOX...")
-        t0 = time.time()
-
-        result = synthesize_audio(state, run_dir)
-        state.update(result)
-
-        elapsed = time.time() - t0
-        audio_meta = state.get("audio_metadata", [])
-        if audio_meta:
-            total_dur = sum(m.get("duration_sec", 0) for m in audio_meta)
-            total_err = sum(m.get("errors", 0) for m in audio_meta)
-            print(f"      -> {len(audio_meta)} episode(s), "
-                  f"{total_dur / 60:.1f} min total"
-                  f"{f', {total_err} errors' if total_err else ''} ({elapsed:.1f}s)")
-        else:
-            print(f"      -> skipped (VOICEVOX not available)")
-
-        p = save_readable(run_dir, "06_audio.md", format_audio_report(audio_meta))
-        print(f"      Saved: {p}")
+            # Patch state with any CLI overrides that might have changed
+            overrides = {
+                "reader_model": args.reader_model,
+                "dramaturg_model": args.dramaturg_model,
+                "translator_model": args.translator_model,
+                "work_description": work_description,
+                "persona_config": persona_config,
+                "skip_research": args.skip_research,
+                "skip_audio": args.skip_audio,
+                "skip_translate": args.skip_translate,
+                "run_dir": str(run_dir),
+            }
+            graph.update_state(config, overrides, as_node=prev)
+            stream_input = None
+            print(f"  Checkpoint rewound to after '{prev}', resuming from '{args.from_node}'")
         print()
-
-    # ── Stage 7: Translate intermediate outputs to Japanese ─────
-    if not args.skip_translate:
-        current_stage += 1
-        print(f"[{current_stage}/{total_stages}] Translation: converting intermediate outputs to Japanese (model: {args.translator_model})...")
-        t0 = time.time()
-
-        translated_files = translate_intermediate_outputs(
-            run_dir=run_dir,
-            model=args.translator_model,
-            work_description=work_description,
-        )
-
-        elapsed = time.time() - t0
-        print(f"      -> {len(translated_files)} file(s) translated ({elapsed:.1f}s)")
+    elif resuming:
+        # Plain resume — continue from last checkpoint
+        stream_input = None
+        print("  Resuming from last checkpoint...")
         print()
+    else:
+        stream_input = initial_state
 
-    # ── Flush thinking log ──────────────────────────────────────
+    # --- Stream execution ---
+    current_stage = 0
+    t_node_start = time.time()
+
+    try:
+        for event in graph.stream(stream_input, config, stream_mode="updates"):
+            elapsed = time.time() - t_node_start
+
+            for node_name, output in event.items():
+                meta = NODE_META.get(node_name)
+                if meta is None:
+                    continue
+
+                label, prefix, state_key, fmt_fn, summary_fn = meta
+
+                # Skip no-op nodes in progress count
+                if node_name == "check_translate":
+                    t_node_start = time.time()
+                    continue
+
+                current_stage += 1
+                # Save intermediate files
+                if prefix and state_key and output.get(state_key) is not None:
+                    data = output[state_key]
+                    _save(run_dir, prefix, data, fmt_fn)
+
+                # Special: reading_material is a string, not a dict
+                if node_name == "generate_reading_material" and isinstance(output.get("reading_material"), str):
+                    md_path = run_dir / f"{prefix}.md"
+                    md_path.write_text(output["reading_material"], encoding="utf-8")
+
+                # Build summary from the streamed output merged into a snapshot
+                snapshot = dict(initial_state)
+                snapshot.update(output)
+                summary = summary_fn(snapshot) if summary_fn else ""
+
+                print(f"[{current_stage}/{total_stages}] {label}: {summary} ({elapsed:.1f}s)")
+
+            t_node_start = time.time()
+
+    except KeyboardInterrupt:
+        print()
+        print("  Interrupted! Progress saved to checkpoint.")
+        print(f"  Resume with: python3 main.py --book {args.book} --resume {run_id}")
+        conn.close()
+        sys.exit(130)
+
+    # --- Flush thinking log ---
+    final_state = graph.get_state(config)
+    state_values = final_state.values if final_state else initial_state
+
     log_path = flush_log(
         run_id=run_id,
         book_title=book_title,
         mode=args.mode,
-        steps=state.get("thinking_log", []),
-        concept_graph=state.get("concept_graph"),
-        syllabus=state.get("syllabus"),
+        steps=state_values.get("thinking_log", []),
+        concept_graph=state_values.get("concept_graph"),
+        syllabus=state_values.get("syllabus"),
     )
 
-    # ── Summary ─────────────────────────────────────────────────
+    conn.close()
+
+    # --- Summary ---
+    print()
     print("=" * 60)
     print("  Pipeline complete!")
     print("=" * 60)
@@ -636,10 +672,10 @@ def main():
     if not args.skip_translate:
         print(f"    *_ja.md                   - Japanese translations")
     print(f"    *.json                    - Machine-readable versions")
+    print(f"    checkpoint.sqlite         - LangGraph checkpoint (for --resume)")
     print()
     print(f"  Thinking log: {log_path}")
-    print(f"    Contains full prompt/response pairs for every LLM call.")
-    print(f"    Use this to trace how each concept was extracted.")
+    print(f"  Resume: python3 main.py --book {args.book} --resume {run_id}")
     print()
 
 

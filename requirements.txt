@@ -8,3 +8,4 @@ pydub>=0.25.1
 audioop-lts>=0.2.1  # required by pydub on Python 3.13+
 tavily-python>=0.5.0
 ddgs>=7.0.0
+langgraph-checkpoint-sqlite>=2.0.0

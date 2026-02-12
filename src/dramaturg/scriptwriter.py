@@ -55,8 +55,8 @@ SCRIPT_PROMPT = """\
 
 ### 第2幕：哲学的掘り下げ（約5分 / 20-30発言）
 - 原著の概念を一つずつ丁寧に掘り下げる
-- 原著『{book_title_ja}』からの引用を自然に織り込む（最低3箇所）
-- 引用する際は、{author_ja}の原文であることが聴き手にわかるようにすること
+- 【重要】原文をそのまま引用・朗読しないこと。概念や主張は登場人物自身の言葉で噛み砕いて説明する
+- 原著の核心的なフレーズ（「我思う、ゆえに我あり」等）は会話の中で自然に言及してよいが、長い原文の引用は避ける
 - 二人が対立したり、意見が食い違う場面を含める
 - 具体例、思考実験、現代の事例を交えて抽象的な概念を生き生きとさせる
 - アポリア（未解決の問い）に正面から取り組み、簡単には答えを出さない
@@ -104,7 +104,7 @@ def _format_concepts(concept_graph: dict, concept_ids: list[str]) -> str:
         quotes = "\n".join(f'    「{q}」' for q in c.get("original_quotes", [])[:3])
         entry = f"- **{c['name']}**（{c['id']}）: {c['description']}"
         if quotes:
-            entry += f"\n  原著の引用（対話で活用すること）:\n{quotes}"
+            entry += f"\n  原著の該当箇所（参考情報。対話では自分の言葉で言い換えること）:\n{quotes}"
         if c.get("id") in concept_ids:
             primary_lines.append(entry)
         else:

@@ -61,18 +61,18 @@ def _synthesize_line(client: VoicevoxClient, text: str, speaker_id: int, speed_s
         return None
 
 
-def synthesize_audio(state: dict, run_dir: Path, speed_scale: float = 1.3, intonation_scale: float = 1.5) -> dict:
+def synthesize_audio(state: dict, speed_scale: float = 1.3, intonation_scale: float = 1.5) -> dict:
     """Pipeline function: convert scripts to MP3 audio files via VOICEVOX.
 
     Args:
-        state: Pipeline state with scripts and persona_config.
-        run_dir: Path to the current run directory.
+        state: Pipeline state with scripts, persona_config, and run_dir.
         speed_scale: VOICEVOX speedScale (1.0 = normal, 1.3 = faster).
         intonation_scale: VOICEVOX intonationScale (1.0 = normal, higher = more expressive).
 
     Returns:
         Dict with audio_metadata and updated thinking_log.
     """
+    run_dir = Path(state["run_dir"])
     scripts = state.get("scripts", [])
     persona_config = state.get("persona_config", {})
     steps = list(state.get("thinking_log", []))
