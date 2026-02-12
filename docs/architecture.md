@@ -305,5 +305,8 @@ project-root/
     ├── architecture.md              #   本ファイル（アーキテクチャ全体像）
     ├── usage-guide.md               #   インストール・設定・実行方法
     ├── llm-pipeline-flow.md         #   LLM 呼び出しの詳細
-    └── log-format-guide.md          #   ログファイルの解説
+    ├── log-format-guide.md          #   ログファイルの解説
+    ├── data-schema-reference.md     #   各ステージの JSON スキーマ
+    ├── prompt-templates-reference.md #  プロンプトテンプレートの詳細
+    └── debugging-guide.md           #   デバッグ手順書
 ```
