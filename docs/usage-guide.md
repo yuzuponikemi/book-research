@@ -10,7 +10,7 @@ Project Cogito を実際に動かすための手順書。
 |------|------|------|
 | **Python** | 3.13 以上 | 3.14 で動作確認済み |
 | **Ollama** | 最新版 | ローカル LLM 推論基盤 |
-| **ffmpeg** | 任意のバージョン | 音声合成（Stage 6）に必要 |
+| **ffmpeg** | 任意のバージョン | 音声合成（`synthesize_audio`）に必要 |
 | **VOICEVOX** | 任意のバージョン | 音声合成に必要。`--skip-audio` でスキップ可能 |
 
 ---
@@ -144,6 +144,57 @@ open -a VOICEVOX
 
 ---
 
+## 中断と再開
+
+パイプラインは LangGraph のチェックポイント機能を使い、各ノード完了後に state を `checkpoint.sqlite` に自動保存する。これにより、長時間実行を安全に中断・再開できる。
+
+### 中断
+
+実行中に `Ctrl-C` で中断すると、最後に完了したノードまでの進捗が保存される。
+
+```
+[3/5] Synthesis: 6 concepts, 3 relations (45.6s)
+^C
+  Interrupted! Progress saved to checkpoint.
+  Resume with: python3 main.py --book descartes_discourse --resume run_20260212_100013
+```
+
+### 再開（最後の checkpoint から）
+
+```bash
+.venv/bin/python3 main.py --book descartes_discourse \
+    --resume run_20260212_100013
+```
+
+完了済みのノードはスキップされ、中断した箇所から実行が再開される。
+
+### 特定ノードからの再実行
+
+`--from-node` を使うと、指定したノード以降を再実行できる。以前のノードの結果は checkpoint から復元される。
+
+```bash
+# 台本だけを再生成（分析・設計の結果はそのまま利用）
+.venv/bin/python3 main.py --book descartes_discourse \
+    --resume run_20260212_100013 \
+    --from-node write_scripts
+
+# モデルを変更して台本を再生成
+.venv/bin/python3 main.py --book descartes_discourse \
+    --resume run_20260212_100013 \
+    --from-node write_scripts \
+    --dramaturg-model command-r
+```
+
+`--from-node` で指定可能なノード名：
+
+```
+ingest, analyze_chunks, synthesize, research, critique, enrich,
+generate_reading_material, plan, write_scripts, synthesize_audio,
+check_translate, translate
+```
+
+---
+
 ## CLI 引数一覧
 
 | 引数 | デフォルト | 説明 |
@@ -155,9 +206,11 @@ open -a VOICEVOX
 | `--reader-model` | `llama3` | Reader/Director 層の Ollama モデル名 |
 | `--dramaturg-model` | `qwen3-next` | Dramaturg 層の Ollama モデル名 |
 | `--translator-model` | `translategemma:12b` | 翻訳ステージの Ollama モデル名 |
-| `--skip-research` | `false` | 研究・批評・統合・読書ガイド（Stage 3b〜3e）をスキップ |
-| `--skip-audio` | `false` | VOICEVOX 音声合成（Stage 6）をスキップ |
-| `--skip-translate` | `false` | 日本語翻訳（Stage 7）をスキップ |
+| `--skip-research` | `false` | 研究・批評・統合・読書ガイドをスキップ |
+| `--skip-audio` | `false` | VOICEVOX 音声合成をスキップ |
+| `--skip-translate` | `false` | 日本語翻訳をスキップ |
+| `--resume` | なし | 前回の実行を再開する（run ID を指定、例: `run_20260212_100013`） |
+| `--from-node` | なし | 指定ノードから再実行する（`--resume` 必須） |
 
 ---
 
@@ -272,10 +325,11 @@ presets:
 | `05_scripts.md` | 対話台本 | 最終成果物。ポッドキャストの台本全文 |
 | `06_audio/ep01.mp3` ... | 音声ファイル | VOICEVOX で合成されたポッドキャスト音声 |
 | `*_ja.md` | 日本語翻訳版 | 英語中間出力の日本語版 |
+| `checkpoint.sqlite` | チェックポイント | `--resume` での再開に使用 |
 
 `.json` ファイルは同じデータの機械読み取り可能な版で、後続の分析や可視化に利用できる。
 
-LLM コールのログは `logs/run_YYYYMMDD_HHMMSS.json` に保存される。各ステップのプロンプト全文・LLM の生レスポンス・パース結果・エラーが記録されており、結果の品質が低い場合のデバッグに使用できる。
+LLM コールのログは `logs/run_YYYYMMDD_HHMMSS.json` に保存される。詳細は [log-format-guide.md](log-format-guide.md) を参照。
 
 ---
 
@@ -357,21 +411,21 @@ Web 検索が完全に利用不可の場合でも、`--skip-research` でスキ�
 
 ## パフォーマンス目安
 
-以下は Apple Silicon Mac（M1/M2/M3 系）での目安。実際の所要時間はモデルサイズ、テキスト量、チャンク数に依存する。
+以下は Apple Silicon Mac（M1/M2/M3/M4 系）での目安。実際の所要時間はモデルサイズ、テキスト量、チャンク数に依存する。
 
 | ステージ | essence モード | curriculum モード | 備考 |
 |---------|---------------|-----------------|------|
-| Stage 1: Ingest | 数秒 | 数秒 | 初回のみダウンロード |
-| Stage 2: Analyze | 5〜15分 | 5〜15分 | チャンク数 x LLM コール |
-| Stage 3: Synthesize | 2〜5分 | 2〜5分 | 1回の LLM コール |
-| Stage 3b: Research | 1〜3分 | 1〜3分 | Web 検索 + 参考文献要約 |
-| Stage 3c: Critique | 2〜5分 | 2〜5分 | 1回の LLM コール |
-| Stage 3d: Enrich | 2〜5分 | 2〜5分 | 1回の LLM コール |
-| Stage 3e: Reading Material | 10〜20分 | 10〜20分 | チャンク数 + 2 の LLM コール |
-| Stage 4: Plan | 1〜3分 | 1〜3分 | 1回の LLM コール |
-| Stage 5: Script | 3〜10分 | 15〜60分 | エピソード数 x LLM コール |
-| Stage 6: Audio | 3〜10分 | 15〜30分 | VOICEVOX 逐次合成 |
-| Stage 7: Translate | 5〜15分 | 5〜15分 | セクション数 x LLM コール |
+| Ingest | 数秒 | 数秒 | 初回のみダウンロード |
+| Analyze | 5〜15分 | 5〜15分 | チャンク数 x LLM コール |
+| Synthesize | 2〜5分 | 2〜5分 | 1回の LLM コール |
+| Research | 1〜3分 | 1〜3分 | Web 検索 + 参考文献要約 |
+| Critique | 2〜5分 | 2〜5分 | 1回の LLM コール |
+| Enrich | 2〜5分 | 2〜5分 | 1回の LLM コール |
+| Reading Material | 10〜20分 | 10〜20分 | チャンク数 + 2 の LLM コール |
+| Plan | 1〜3分 | 1〜3分 | 1回の LLM コール |
+| Script | 3〜10分 | 15〜60分 | エピソード数 x LLM コール |
+| Audio | 3〜10分 | 15〜30分 | VOICEVOX 逐次合成 |
+| Translate | 5〜15分 | 5〜15分 | セクション数 x LLM コール |
 
 **最速パス**（essence + 全スキップ）:
 
@@ -384,5 +438,5 @@ Web 検索が完全に利用不可の場合でも、`--skip-research` でスキ�
 
 ```bash
 .venv/bin/python3 main.py --mode curriculum
-# → 約 60〜180分
+# → 約 60〜180分（中断しても --resume で再開可能）
 ```
