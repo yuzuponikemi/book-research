@@ -8,14 +8,14 @@ from src.logger import create_step, extract_json
 
 
 SUMMARIZE_PROMPT = """\
-You are a research assistant summarizing a reference document about the philosophical work \
+You are a research assistant summarizing a reference document about the work \
 "{book_title}" by {author}.
 
 Read the following reference text and produce a structured summary covering:
 1. **Author biography** — key facts about the author's life relevant to this work
 2. **Historical context** — the era, intellectual climate, and events surrounding the work
 3. **Publication history** — how the work was published, received, and disseminated
-4. **Key arguments** — the main philosophical claims and their structure
+4. **Key arguments** — the main claims, theories, or frameworks and their structure
 5. **Critical reception** — how other thinkers responded to this work
 6. **Modern significance** — why this work matters today
 

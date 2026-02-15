@@ -19,37 +19,6 @@ from langchain_ollama import ChatOllama
 from src.logger import create_step, extract_json
 
 
-# ── Per-Part critic mapping for Discourse on the Method ──────────────
-# Each Part of the Discourse has historically relevant critics.
-# This is used to inject Part-specific critical perspectives.
-PART_CRITICS = {
-    1: [
-        ("モンテーニュ", "デカルト以前の懐疑主義者。「常識」の普遍性に疑問を投げかけ、文化相対主義の先駆者"),
-        ("スコラ学者たち", "デカルトが批判した伝統的学問の擁護者。アリストテレス的知識体系の価値を主張"),
-    ],
-    2: [
-        ("ライプニッツ", "デカルトの四規則が過度に単純化されていると批判。より精密な論理体系（普遍記号法）を提案"),
-        ("ベーコン", "帰納法を重視し、デカルトの演繹的方法への偏重を批判。実験の重要性を強調"),
-    ],
-    3: [
-        ("パスカル", "暫定的道徳を「信仰なき道徳」と批判。理性だけでは人間の全体性を捉えられないと主張"),
-        ("ストア派の伝統", "デカルトの第三格率はエピクテトスの影響を受けているが、キリスト教的文脈で再解釈されている"),
-    ],
-    4: [
-        ("アルノー", "コギトと神の証明における循環論法（デカルトの循環）を指摘した第四反論の著者"),
-        ("ガッサンディ", "経験主義的立場からコギトの直観性と心身二元論を批判した第五反論の著者"),
-    ],
-    5: [
-        ("ハーヴェイ", "血液循環を発見したが、心臓の運動メカニズムについてデカルトと意見が対立"),
-        ("ラ・メトリ", "デカルトの動物機械論を人間にも拡張し、『人間機械論』（1747）で唯物論的立場を主張"),
-    ],
-    6: [
-        ("ベーコン", "デカルトと同様に科学の実用性を主張したが、方法論は帰納的・実験的で対照的"),
-        ("ハイデガー", "「自然の主人かつ所有者」という技術的世界観が、存在忘却と環境危機の根源と批判"),
-    ],
-}
-
-
 # ── Section generation prompts ───────────────────────────────────────
 
 ABSTRACT_PROMPT = """\
@@ -58,15 +27,19 @@ You are an academic writer creating a comprehensive study guide for \
 
 Based on the following source material, write a detailed ABSTRACT (400-600 words) \
 that covers:
-1. What this work is about and why it was written — include the historical context \
-(Thirty Years' War, Galileo trial, rise of skepticism)
-2. The main philosophical arguments and contributions — the Four Rules, Cogito, \
-mind-body dualism, provisional morality, mechanistic physics
-3. Its historical significance and lasting impact — how it founded modern philosophy
-4. Why it remains relevant today — AI, critical thinking, environmental ethics
+1. What this work is about and why it was written — include the historical and \
+intellectual context in which the work was produced
+2. The main arguments and contributions — the key concepts, frameworks, or theories \
+the author introduces
+3. Its historical significance and lasting impact on its field
+4. Why it remains relevant today — connections to current debates, technologies, or \
+social challenges
 
 SOURCE MATERIAL:
 {enrichment_summary}
+
+IMPORTANT: Base your abstract SOLELY on the source material above. Do NOT introduce \
+information about other works or authors not mentioned in the source material.
 
 Write the abstract in Japanese (日本語). Use an academic but accessible tone.
 The abstract should give the reader a complete overview of the work's significance.
@@ -87,17 +60,18 @@ these subsections using ## level headings:
 What happens in this section, what {author} argues
 
 ## 主要概念
-Explain the 3-5 most important philosophical concepts introduced (use bold for terms)
+Explain the 3-5 most important concepts and ideas introduced (use bold for terms)
 
 ## 論証構造の分析
 Break down the logical structure of the arguments — premises, conclusions, argument types
 
 ## 修辞的技法
-Note any metaphors, analogies, or thought experiments and their philosophical function
+Note any metaphors, analogies, thought experiments, or rhetorical devices and their function in the argument
 
 ## 批判的考察
-Discuss specific historical criticisms of concepts in this section.
-{part_critics_instruction}
+Discuss specific criticisms or counter-arguments relevant to concepts in this section. \
+Use ONLY the critical perspectives provided below — do NOT invent critics or criticisms.
+{critics_instruction}
 
 SECTION: {section_label}
 
@@ -126,20 +100,18 @@ study guide on "{book_title}" by {author} ({year}).
 Based on the following material, write a conclusion chapter (600-1000 words in Japanese) \
 that covers:
 
-1. **{author}の革命**: この著作が哲学にもたらした根本的変化 — 知の正当化の根拠を外部（神・権威）から \
-内部（個人の理性の明証性）へと移した「主観性の確立」
+1. **{author}の貢献**: この著作がもたらした根本的な変化や革新 — その分野における位置づけ
 
-2. **批判的受容**: 具体的な批評家に言及すること:
-   - パスカル: 「デカルトは許しがたい。哲学全体から神を排除したかった」
-   - 心身問題: アルノー、ガッサンディの批判 → 機会原因論、スピノザの一元論へ
-   - {critics_list}
+2. **批判的受容**: 具体的な批評家や対立する立場に言及すること。\
+以下の批評家リストを参考にすること: {critics_list}
 
-3. **現代的意義**: なぜこの著作は今日でも重要か?
-   - AI・機械学習: 「考える機械」の可能性 — デカルトの動物機械論との対比
-   - 環境倫理: 「自然の主人かつ所有者」という人間中心主義への問い直し
-   - 批判的思考: フェイクニュース時代における方法的懐疑の価値
+3. **現代的意義**: なぜこの著作は今日でも重要か? 現在の議論、テクノロジー、社会的課題との\
+接点について論じること
 
 4. **結語**: この著作の永続的価値についての考察
+
+IMPORTANT: Base your conclusion SOLELY on the material provided below. Do NOT introduce \
+information about other works, authors, or concepts not present in the source material.
 
 ENRICHMENT CONTEXT:
 {enrichment_summary}
@@ -252,7 +224,7 @@ def generate_reading_material(state: dict) -> dict:
     ))
 
     title_line = (
-        f"{author_ja}『{book_title_ja}』に関する包括的構造分析および哲学的意義の再評価"
+        f"{author_ja}『{book_title_ja}』に関する包括的構造分析"
     )
     sections.append(f"# {title_line}")
     sections.append("")
@@ -270,7 +242,7 @@ def generate_reading_material(state: dict) -> dict:
     for i, (chunk, analysis) in enumerate(zip(raw_chunks, chunk_analyses)):
         section_num = i + 1
         first_line = chunk.strip().split("\n")[0]
-        section_label = f"Part {section_num}: {first_line[:80]}"
+        section_label = f"Section {section_num}: {first_line[:80]}"
 
         print(f"      Generating analysis for section {section_num}/{len(raw_chunks)}...")
 
@@ -322,18 +294,22 @@ def generate_reading_material(state: dict) -> dict:
                 + "\n".join(critique_parts[:6])
             )
 
-        # Build Part-specific critic instructions
-        part_critics = PART_CRITICS.get(section_num, [])
-        if part_critics:
-            critic_lines = []
-            for critic_name, critic_desc in part_critics:
-                critic_lines.append(f"- **{critic_name}**: {critic_desc}")
-            part_critics_instruction = (
-                "以下の批評家に必ず言及すること:\n"
-                + "\n".join(critic_lines)
+        # Build critic instructions from book config notable_critics + critique data
+        critics_instruction_parts = []
+        if critique_parts:
+            critics_instruction_parts.append(
+                "以下の批判的視点を参考にすること:\n" + "\n".join(critique_parts[:6])
             )
-        else:
-            part_critics_instruction = "この章に関連する歴史的批評家に言及すること。"
+        if notable_critics:
+            nc_lines = [
+                f"- **{c.get('name', '?')}**: {c.get('perspective', '')}"
+                for c in notable_critics
+            ]
+            critics_instruction_parts.append(
+                "以下の批評家の視点も参照可能:\n" + "\n".join(nc_lines)
+            )
+        critics_instruction = "\n".join(critics_instruction_parts) if critics_instruction_parts else \
+            "この章に関連する批判的視点があれば言及すること。"
 
         prompt = CHAPTER_ANALYSIS_PROMPT.format(
             book_title=book_title,
@@ -345,7 +321,7 @@ def generate_reading_material(state: dict) -> dict:
             rhetorical_text=rhetorical_text,
             logic_flow=logic_flow[:500],
             critique_context=critique_context,
-            part_critics_instruction=part_critics_instruction,
+            critics_instruction=critics_instruction,
         )
 
         chapter_text = _strip_leading_headings(llm.invoke(prompt).content.strip())
@@ -360,10 +336,7 @@ def generate_reading_material(state: dict) -> dict:
             parsed_output={"length": len(chapter_text)},
         ))
 
-        # Use Part numbering matching the original work
-        roman = ["I", "II", "III", "IV", "V", "VI"]
-        part_label = roman[i] if i < len(roman) else str(section_num)
-        sections.append(f"## 第{section_num}章：第{part_label}部の詳細分析 —— {first_line[:40]}")
+        sections.append(f"## 第{section_num}章の詳細分析 —— {first_line[:60]}")
         sections.append(chapter_text)
         sections.append("")
 

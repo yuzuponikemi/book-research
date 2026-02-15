@@ -28,17 +28,17 @@ def _invoke_with_retry(llm, prompt, part_id, max_retries=MAX_RETRIES):
 
 
 ANALYSIS_PROMPT = """\
-You are a philosopher performing deep hermeneutic analysis of a philosophical text.
+You are a scholar performing deep analytical reading of a text.
 
 Your task is to analyze the following text chunk and extract its FULL intellectual structure.
 Do NOT write a summary. Extract the complete REASONING PROCESS with maximum depth:
 
-1. **Concepts** (extract ALL significant philosophical concepts, typically 5-10 per chunk):
+1. **Concepts** (extract ALL significant concepts and ideas, typically 5-10 per chunk):
    For each concept, provide:
-   - id: a snake_case slug (e.g., "methodical_doubt")
+   - id: a snake_case slug (e.g., "social_contract")
    - name: display name
    - description: a rich, detailed explanation of what this concept means in the author's framework (at least 2-3 sentences). Explain WHY the author introduces it, what problem it solves, and how it fits into the larger argument.
-   - original_quotes: 2-4 direct quotes from the text that ground this concept. Use the most philosophically significant passages, not just mentions.
+   - original_quotes: 2-4 direct quotes from the text that ground this concept. Use the most significant passages, not just mentions.
    - source_chunk: "{part_id}"
 
 2. **Aporias** (extract ALL unresolved tensions, typically 2-4 per chunk):
@@ -59,14 +59,14 @@ Do NOT write a summary. Extract the complete REASONING PROCESS with maximum dept
 
 5. **Argument Structures**: Extract the formal arguments in this chunk (typically 1-4). \
 For each, provide:
-   - id: a snake_case slug (e.g., "cogito_argument")
+   - id: a snake_case slug (e.g., "central_thesis_argument")
    - premises: list of premise statements
    - conclusion: the conclusion drawn
    - argument_type: "deductive" | "inductive" | "analogical"
    - source_chunk: "{part_id}"
 
-6. **Named Philosophical Moves**: Identify any well-known philosophical techniques, \
-methods, or named strategies used by the author. {key_terms_instruction}
+6. **Named Techniques or Frameworks**: Identify any well-known techniques, \
+methods, frameworks, or named strategies used by the author. {key_terms_instruction}
 
 7. **Rhetorical Strategies**: Identify metaphors, analogies, thought experiments, or \
 appeals to authority used to persuade the reader (typically 1-3). For each, provide:

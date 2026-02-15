@@ -11,7 +11,7 @@ You are a professional English (en) to Japanese (ja) translator. \
 Your goal is to accurately convey the meaning and nuances of the original \
 English text while adhering to Japanese grammar, vocabulary, and cultural \
 sensitivities. This text is about {work_description}. \
-Preserve all technical philosophical terms accurately. Keep markdown \
+Preserve all technical terms accurately. Keep markdown \
 formatting (headers, bold, lists, quotes) intact.
 Produce only the Japanese translation, without any additional explanations \
 or commentary. Please translate the following English text into Japanese:
@@ -76,7 +76,7 @@ def translate_text(text: str, model: str = "translategemma:12b",
 
     # Build the prompt template with work_description baked in
     prompt_template = TRANSLATE_PROMPT.format(
-        work_description=work_description or "a philosophical work",
+        work_description=work_description or "an academic work",
     )
 
     sections = _split_by_sections(text)

@@ -9,7 +9,7 @@ from src.models import Syllabus
 
 
 ESSENCE_PROMPT = """\
-You are a podcast director designing a single, powerful episode about a philosophical work.
+You are a podcast director designing a single, powerful episode about a notable work.
 
 Given the concept graph below, select the SINGLE most important aporia (unresolved tension) \
 and the 2-3 core concepts most essential to understanding it. This episode should capture \
@@ -26,7 +26,7 @@ Design one episode with:
 - concept_ids: The 2-3 most important concept IDs (must match IDs from the concept graph)
 - aporia_ids: The 1-2 most important aporia IDs (must match IDs from the concept graph)
 - cliffhanger: A thought-provoking question to leave listeners with (in English)
-- cognitive_bridge: How this 17th-century idea connects to modern life — technology, AI, social media, etc. (in English)
+- cognitive_bridge: How this idea connects to modern life — technology, AI, social media, etc. (in English)
 
 Also provide:
 - meta_narrative: A one-sentence description of the overall story arc (in English)
@@ -54,20 +54,20 @@ You are a podcast director designing a multi-episode curriculum about \
 {work_description}.
 
 Given the concept graph below, create EXACTLY 6 episodes that follow the logical \
-progression of the original text's six Parts. Each episode should correspond roughly to \
-one Part of the work, building progressively from foundational ideas to the most complex.
+progression of the original text. Each episode should build progressively from \
+foundational ideas to the most complex, following the author's own argumentative arc.
 
 IMPORTANT: Write ALL output in English. Do NOT write in Japanese.
+IMPORTANT: Base your episode design SOLELY on the concept graph provided below. \
+Do NOT introduce concepts, themes, or arguments that are not present in the graph.
 
 {key_terms_guidance}
 
-Episode structure (follow this progression):
-- Episode 1: The crisis of knowledge — why existing learning fails (Part I themes)
-- Episode 2: The method discovered — the four rules and their power (Part II themes)
-- Episode 3: Living while doubting — provisional morality and practical wisdom (Part III themes)
-- Episode 4: The breakthrough — Cogito, God, and the foundation of certainty (Part IV themes)
-- Episode 5: The machine universe — physics, biology, and the animal-machine (Part V themes)
-- Episode 6: Science and society — publishing, experiments, and mastering nature (Part VI themes)
+Episode design principles:
+- Episode 1 should introduce the problem or motivation that drives the work
+- Episodes 2-5 should develop the core arguments, each building on the previous
+- Episode 6 should address implications, applications, or unresolved tensions
+- The progression should reflect the internal logic of the work, not an arbitrary division
 
 Guidelines for each episode:
 - Focus on 2-4 concepts and 1-2 aporias from the concept graph
@@ -208,7 +208,7 @@ def plan(state: dict) -> dict:
     elif mode == "topic":
         prompt = TOPIC_PROMPT.format(
             concept_graph_json=concept_graph_json,
-            topic=topic or "methodical doubt",
+            topic=topic or "the central argument",
             work_description=work_description,
         )
         prompt += enrichment_block

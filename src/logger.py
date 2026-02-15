@@ -11,16 +11,16 @@ LOGS_DIR = Path(__file__).parent.parent / "logs"
 
 
 class ThinkingStep(BaseModel):
-    timestamp: str
-    layer: str  # "reader" | "director" | "dramaturg"
-    node: str  # e.g., "analyst", "synthesizer", "planner"
-    action: str
-    input_summary: str
-    llm_prompt: str
-    llm_raw_response: str
-    parsed_output: dict | None
-    error: str | None
-    reasoning: str
+    timestamp: str = ""
+    layer: str = ""  # "reader" | "director" | "dramaturg" | "audio"
+    node: str = ""  # e.g., "analyst", "synthesizer", "planner"
+    action: str = ""
+    input_summary: str = ""
+    llm_prompt: str = ""
+    llm_raw_response: str = ""
+    parsed_output: dict | None = None
+    error: str | None = None
+    reasoning: str = ""
 
 
 class ThinkingLog(BaseModel):

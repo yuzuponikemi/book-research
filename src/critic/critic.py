@@ -8,7 +8,7 @@ from src.logger import create_step, extract_json
 
 
 CRITIQUE_PROMPT = """\
-You are a historian of philosophy producing a critique report for "{book_title}" by {author}.
+You are a scholar producing a critique report for "{book_title}" by {author}.
 
 You have access to the concept graph from the original text analysis, research context \
 from secondary sources, and a list of notable critics.

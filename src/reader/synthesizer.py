@@ -9,13 +9,13 @@ from src.models import ConceptGraph
 
 
 SYNTHESIS_PROMPT = """\
-You are synthesizing multiple chunk-level philosophical analyses into a unified concept graph.
+You are synthesizing multiple chunk-level analyses into a unified concept graph.
 
 Below are analyses from {chunk_count} chunks of {work_description}.
 
 IMPORTANT: Preserve richness. The final graph should have 10-20 unified concepts, NOT fewer. \
 Only merge concepts that are truly the same idea. Different aspects of a broad concept \
-(e.g., "methodical doubt as epistemological tool" vs "methodical doubt applied to morals") \
+(e.g., "concept X as theoretical framework" vs "concept X applied in practice") \
 should remain as separate concepts with a relation between them.
 
 Your tasks:
@@ -26,9 +26,9 @@ For each merged concept, set source_chunk to "COMBINED" and note which parts it 
    - Do NOT merge concepts that are merely related — only true duplicates.
    - Aim for 10-20 concepts in the final graph.
 
-2. **Build cross-chunk relations**: Identify ALL conceptual dependencies across parts. \
-For example: methodical doubt (Part I/II) → cogito (Part IV) → God's existence (Part IV) \
-→ external world (Part V). Map the full chain.
+2. **Build cross-chunk relations**: Identify ALL conceptual dependencies across chunks. \
+Trace the full chain of how ideas build on, contradict, or evolve from each other. \
+Map every significant dependency.
    - Aim for at least 8-12 relations.
 
 3. **Identify the core frustration**: What is the single driving tension of the entire work? \
@@ -39,7 +39,7 @@ scratch, the question that haunts every chapter.
 Aim for 4-8 aporias in the final graph.
 
 5. **Create the unified logic flow**: A detailed narrative (at least 6-8 sentences) tracing \
-the entire reasoning chain from Part I through Part VI. Explain what drives each transition.
+the entire reasoning chain from beginning to end. Explain what drives each transition.
 
 CHUNK ANALYSES:
 {analyses_json}

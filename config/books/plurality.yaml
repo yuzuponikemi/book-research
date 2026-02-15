@@ -1,0 +1,63 @@
+book:
+  title: "Plurality: The Future of Collaborative Technology and Democracy"
+  title_ja: "⿻数位：協働テクノロジーと民主主義の未来"
+  author: "Audrey Tang & E. Glen Weyl"
+  author_ja: "オードリー・タン & E・グレン・ワイル"
+  year: 2024
+
+source:
+  type: "local_file"
+  path: "plurality_english.md"
+
+chunking:
+  strategy: "token"
+  max_tokens: 15000
+
+research:
+  search_queries:
+    - "Audrey Tang Plurality book digital democracy"
+    - "Glen Weyl Plurality collaborative technology"
+    - "digital democracy Taiwan vTaiwan Polis"
+    - "Quadratic Voting RadicalxChange mechanism design"
+    - "Plurality book review technology democracy 2024"
+  reference_files: []
+  max_search_results: 5
+
+context:
+  era: "21st century"
+  tradition: "Digital Democracy, Mechanism Design, Collaborative Technology"
+  key_terms:
+    - "Plurality (⿻)"
+    - "Quadratic Voting"
+    - "Quadratic Funding"
+    - "Polis"
+    - "vTaiwan"
+    - "Collaborative Technology"
+    - "Digital Public Infrastructure"
+    - "Soulbound Tokens"
+    - "Intersectional Identity"
+    - "Augmented Deliberation"
+    - "Plural Money"
+    - "Data Dignity"
+  notable_critics:
+    - name: "Shoshana Zuboff"
+      perspective: "Warns of surveillance capitalism undermining democratic agency through digital platforms"
+    - name: "Evgeny Morozov"
+      perspective: "Criticizes techno-solutionism and the naive application of technology to political problems"
+    - name: "Jaron Lanier"
+      perspective: "Advocates for data dignity but questions scalability of radical market mechanisms"
+    - name: "Cass Sunstein"
+      perspective: "Highlights risks of echo chambers and group polarization in digital deliberation"
+
+prompt_fragments:
+  work_description: >
+    "Plurality" (2024) by Audrey Tang and E. Glen Weyl is a manifesto for collaborative
+    technology and democracy. It proposes that digital tools can bridge social differences
+    and strengthen democratic institutions through mechanisms like Quadratic Voting,
+    digital deliberation platforms (Polis, vTaiwan), and new approaches to identity,
+    property, and governance in the digital age.
+  analysis_guidance: >
+    Pay attention to: the philosophical foundations drawing from Henry George, John Dewey,
+    and Danielle Allen; the concrete mechanisms (QV, QF, Polis); the Taiwan digital democracy
+    experiments; the tension between individual rights and collective coordination;
+    and the vision for technology serving democracy rather than undermining it.

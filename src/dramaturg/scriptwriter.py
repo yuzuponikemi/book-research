@@ -101,8 +101,12 @@ def _format_concepts(concept_graph: dict, concept_ids: list[str]) -> str:
     primary_lines = []
     secondary_lines = []
     for c in concepts:
+        if isinstance(c, str):
+            entry = f"- {c[:200]}"
+            secondary_lines.append(entry)
+            continue
         quotes = "\n".join(f'    「{q}」' for q in c.get("original_quotes", [])[:3])
-        entry = f"- **{c['name']}**（{c['id']}）: {c['description']}"
+        entry = f"- **{c.get('name', '?')}**（{c.get('id', '?')}）: {c.get('description', '')}"
         if quotes:
             entry += f"\n  原著の該当箇所（参考情報。対話では自分の言葉で言い換えること）:\n{quotes}"
         if c.get("id") in concept_ids:
@@ -124,8 +128,14 @@ def _format_aporias(concept_graph: dict, aporia_ids: list[str]) -> str:
     primary_lines = []
     secondary_lines = []
     for a in aporias:
-        entry = f"- **{a['question']}**\n  背景: {a['context']}\n  関連概念: {', '.join(a.get('related_concepts', []))}"
-        if a.get("id") in aporia_ids:
+        if isinstance(a, str):
+            entry = f"- {a[:200]}"
+        else:
+            q = a.get('question', a.get('name', '?'))
+            ctx = a.get('context', '')
+            related = a.get('related_concepts', [])
+            entry = f"- **{q}**\n  背景: {ctx}\n  関連概念: {', '.join(related)}"
+        if isinstance(a, dict) and a.get("id") in aporia_ids:
             primary_lines.append(entry)
         else:
             secondary_lines.append(entry)

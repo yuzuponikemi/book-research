@@ -69,6 +69,9 @@ def format_analysis_report(analyses: list[dict]) -> str:
         if concepts:
             lines.append("### Concepts")
             for c in concepts:
+                if isinstance(c, str):
+                    lines.append(f"- {c[:200]}")
+                    continue
                 lines.append(f"- **{c.get('name', '?')}** (`{c.get('id', '?')}`)")
                 lines.append(f"  {c.get('description', '')[:120]}")
                 for q in c.get("original_quotes", [])[:2]:
@@ -78,6 +81,9 @@ def format_analysis_report(analyses: list[dict]) -> str:
         if aporias:
             lines.append("### Aporias")
             for a in aporias:
+                if isinstance(a, str):
+                    lines.append(f"- {a[:200]}")
+                    continue
                 lines.append(f"- **{a.get('question', '?')}**")
                 lines.append(f"  Context: {a.get('context', '')[:120]}")
             lines.append("")
@@ -85,6 +91,9 @@ def format_analysis_report(analyses: list[dict]) -> str:
         if relations:
             lines.append("### Relations")
             for r in relations:
+                if isinstance(r, str):
+                    lines.append(f"- {r[:200]}")
+                    continue
                 lines.append(f"- {r.get('source', '?')} --[{r.get('relation_type', '?')}]--> {r.get('target', '?')}")
                 lines.append(f"  {r.get('evidence', '')[:100]}")
             lines.append("")
@@ -92,15 +101,21 @@ def format_analysis_report(analyses: list[dict]) -> str:
         if arguments:
             lines.append("### Argument Structures")
             for arg in arguments:
+                if isinstance(arg, str):
+                    lines.append(f"- {arg[:200]}")
+                    continue
                 lines.append(f"- **{arg.get('id', '?')}** ({arg.get('argument_type', '?')})")
                 for p in arg.get("premises", []):
-                    lines.append(f"  - Premise: {p[:100]}")
+                    lines.append(f"  - Premise: {p[:100] if isinstance(p, str) else str(p)[:100]}")
                 lines.append(f"  - Conclusion: {arg.get('conclusion', '')[:100]}")
             lines.append("")
 
         if rhetorical:
             lines.append("### Rhetorical Strategies")
             for rs in rhetorical:
+                if isinstance(rs, str):
+                    lines.append(f"- {rs[:200]}")
+                    continue
                 lines.append(f"- **{rs.get('strategy_type', '?')}** (`{rs.get('id', '?')}`)")
                 lines.append(f"  {rs.get('description', '')[:120]}")
                 if rs.get("original_quote"):
