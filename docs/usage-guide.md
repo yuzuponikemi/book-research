@@ -211,6 +211,21 @@ check_translate, translate
 | `--skip-translate` | `false` | 日本語翻訳をスキップ |
 | `--resume` | なし | 前回の実行を再開する（run ID を指定、例: `run_20260212_100013`） |
 | `--from-node` | なし | 指定ノードから再実行する（`--resume` 必須） |
+| `--trace` | `false` | Arize Phoenix のローカル UI を起動し、全 LLM 呼び出しをトレース |
+
+---
+
+## LLM トレーシング（Arize Phoenix）
+
+`--trace` フラグを付けると、ローカルに Arize Phoenix UI が起動し、全 LLM 呼び出し（ChatOllama 経由）の入出力・レイテンシをリアルタイムで可視化できる。
+
+```bash
+.venv/bin/python3 main.py --book descartes_discourse --mode essence --trace
+```
+
+起動後、ターミナルに表示される URL（通常 `http://localhost:6006`）をブラウザで開くと、各ステージ（analyst, synthesizer, planner 等）のスパンがトレースとして表示される。
+
+**依存パッケージ**: `arize-phoenix`, `openinference-instrumentation-langchain`（`requirements.txt` に含まれている）
 
 ---
 

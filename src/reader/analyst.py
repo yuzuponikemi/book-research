@@ -156,6 +156,10 @@ def analyze_chunks(state: dict) -> dict:
     book_config = state.get("book_config", {})
     key_terms = book_config.get("context", {}).get("key_terms", [])
 
+    deep = state.get("deep_analysis", False)
+    if deep:
+        from src.reader.agentic_analyst import analyze_chunk_agentic
+
     chunk_analyses = []
     for i, chunk_text in enumerate(raw_chunks):
         # Extract part_id from the chunk text (first line typically has "PART X")
@@ -163,12 +167,20 @@ def analyze_chunks(state: dict) -> dict:
         part_id = lines[0].strip() if lines else f"chunk_{i}"
 
         print(f"      [{i+1}/{len(raw_chunks)}] Analyzing {part_id}...", end="", flush=True)
-        analysis, step = analyze_chunk(chunk_text, part_id, llm, key_terms=key_terms)
+        if deep:
+            analysis, agent_steps = analyze_chunk_agentic(
+                chunk_text, part_id, llm,
+                prior_analyses=chunk_analyses,
+                key_terms=key_terms,
+            )
+            steps.extend(agent_steps)
+        else:
+            analysis, step = analyze_chunk(chunk_text, part_id, llm, key_terms=key_terms)
+            steps.append(step)
         n_c = len(analysis.get("concepts", []))
         n_a = len(analysis.get("aporias", []))
         print(f" {n_c} concepts, {n_a} aporias")
         chunk_analyses.append(analysis)
-        steps.append(step)
 
     return {
         "chunk_analyses": chunk_analyses,

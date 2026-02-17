@@ -26,6 +26,12 @@ python3 main.py --reader-model command-r --dramaturg-model qwen3-next
 | `--topic` | - | Required for `topic` mode |
 | `--reader-model` | `llama3` | Ollama model for analysis/planning (needs JSON capability) |
 | `--dramaturg-model` | `qwen3-next` | Ollama model for Japanese dialogue generation |
+| `--skip-research` | - | Skip research/critique/enrichment stages |
+| `--skip-audio` | - | Skip VOICEVOX audio synthesis stage |
+| `--skip-translate` | - | Skip Japanese translation stage |
+| `--trace` | - | Launch local Arize Phoenix UI for LLM call tracing |
+| `--resume` | - | Resume from a previous run checkpoint (pass run ID) |
+| `--from-node` | - | Re-execute from this node onward (requires `--resume`) |
 
 ---
 

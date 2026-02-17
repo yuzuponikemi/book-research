@@ -142,6 +142,7 @@ class CogitoState(TypedDict):
     skip_research: bool
     skip_audio: bool
     skip_translate: bool
+    deep_analysis: bool
 
     # Data Artifacts
     raw_chunks: list[str]

@@ -23,6 +23,7 @@ from src.audio.synthesizer import format_audio_report
 from src.researcher.researcher import format_research_context
 from src.critic.critic import format_critique_report
 from src.director.enricher import format_enrichment_report
+from src.visualizer import save_concept_graph_visuals
 
 
 CONFIG_DIR = Path(__file__).parent / "config"
@@ -466,6 +467,8 @@ def main():
     parser.add_argument("--skip-translate", action="store_true", help="Skip the translation step")
     parser.add_argument("--skip-research", action="store_true", help="Skip research/critique/enrichment stages")
     parser.add_argument("--skip-audio", action="store_true", help="Skip VOICEVOX audio synthesis stage")
+    parser.add_argument("--deep-analysis", action="store_true", help="Enable agentic deep analysis with reflection loop")
+    parser.add_argument("--trace", action="store_true", help="Enable Arize Phoenix tracing UI")
     parser.add_argument(
         "--resume", metavar="RUN_ID", default=None,
         help="Resume from a previous run's checkpoint (e.g. run_20250210_153000)",
@@ -535,6 +538,7 @@ def main():
         "skip_research": args.skip_research,
         "skip_audio": args.skip_audio,
         "skip_translate": args.skip_translate,
+        "deep_analysis": args.deep_analysis,
         "run_dir": str(run_dir),
         "run_id": run_id,
     }
@@ -545,6 +549,12 @@ def main():
     audio_stages = 0 if args.skip_audio else 1
     translate_stages = 0 if args.skip_translate else 1
     total_stages = base_stages + research_stages + audio_stages + translate_stages
+
+    # --- Optional tracing ---
+    phoenix_session = None
+    if args.trace:
+        from src.tracing import setup_tracing
+        phoenix_session = setup_tracing()
 
     # --- Banner ---
     print("=" * 60)
@@ -560,8 +570,11 @@ def main():
     print(f"  Dramaturg    : {args.dramaturg_model}")
     if not args.skip_translate:
         print(f"  Translator   : {args.translator_model}")
+    print(f"  Analysis     : {'deep (agentic)' if args.deep_analysis else 'standard'}")
     print(f"  Research     : {'skip' if args.skip_research else 'enabled'}")
     print(f"  Audio        : {'skip' if args.skip_audio else 'VOICEVOX (localhost:50021)'}")
+    if phoenix_session:
+        print(f"  Tracing      : {phoenix_session.url}")
     if args.topic:
         print(f"  Topic        : {args.topic}")
     print(f"  Output dir   : {run_dir}")
@@ -629,6 +642,14 @@ def main():
                     data = output[state_key]
                     _save(run_dir, prefix, data, fmt_fn)
 
+                # Special: generate concept graph visualizations
+                if node_name == "synthesize" and output.get("concept_graph"):
+                    vis_files = save_concept_graph_visuals(
+                        output["concept_graph"], run_dir, book_title)
+                    if vis_files:
+                        names = ", ".join(f.name for f in vis_files)
+                        print(f"      → Visualizations: {names}")
+
                 # Special: reading_material is a string, not a dict
                 if node_name == "generate_reading_material" and isinstance(output.get("reading_material"), str):
                     md_path = run_dir / f"{prefix}.md"
@@ -675,6 +696,8 @@ def main():
     print(f"    01_chunks.md              - Raw text chunks")
     print(f"    02_chunk_analyses.md      - Per-chunk concept extraction")
     print(f"    03_concept_graph.md       - Unified concept graph")
+    print(f"    03_concept_graph_visual.md - Mermaid diagram")
+    print(f"    03_concept_graph.html     - Interactive D3.js visualization")
     if not args.skip_research:
         print(f"    03b_research_context.md   - Web search + reference materials")
         print(f"    03c_critique_report.md    - Critical perspectives")
@@ -690,6 +713,8 @@ def main():
     print(f"    checkpoint.sqlite         - LangGraph checkpoint (for --resume)")
     print()
     print(f"  Thinking log: {log_path}")
+    if phoenix_session:
+        print(f"  Phoenix UI: {phoenix_session.url}")
     print(f"  Resume: python3 main.py --book {args.book} --resume {run_id}")
     print()
 
