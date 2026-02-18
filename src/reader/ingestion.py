@@ -39,7 +39,7 @@ def load_local_file(filepath: str) -> str:
 def acquire_text(source_config: dict) -> str:
     """Acquire text based on source configuration.
 
-    Supports source types: gutenberg, local_file, url.
+    Supports source types: gutenberg, local_file, url, arxiv.
     """
     source_type = source_config["type"]
     url = source_config.get("url", "")
@@ -51,6 +51,11 @@ def acquire_text(source_config: dict) -> str:
         return load_local_file(source_config.get("path", cache_filename))
     elif source_type == "url":
         return download_text(url, cache_filename)
+    elif source_type == "arxiv":
+        from src.reader.arxiv_client import fetch_arxiv_fulltext
+        arxiv_id = source_config["arxiv_id"]
+        cache = cache_filename or f"arxiv_{arxiv_id.replace('/', '_')}.md"
+        return fetch_arxiv_fulltext(arxiv_id, cache)
     else:
         raise ValueError(f"Unknown source type: {source_type}")
 
@@ -113,6 +118,59 @@ def chunk_by_heading(text: str) -> list[dict]:
     return chunk_by_regex(text, r"^([A-Z][A-Z\s]{3,}[A-Z])$")
 
 
+def chunk_by_section(text: str, min_chars: int = 200) -> list[dict]:
+    """Split text by markdown ## headings (academic paper sections).
+
+    Sections shorter than min_chars are merged into the next section.
+    """
+    pattern = re.compile(r"^(## .+)$", re.MULTILINE)
+    splits = list(pattern.finditer(text))
+
+    if not splits:
+        return [{"part_id": "full_text", "text": text}]
+
+    # Include any text before the first heading as a preamble
+    raw_chunks: list[tuple[str, str]] = []
+    preamble = text[:splits[0].start()].strip()
+    if preamble:
+        raw_chunks.append(("preamble", preamble))
+
+    for i, match in enumerate(splits):
+        heading = match.group(1).strip()
+        start = match.start()
+        end = splits[i + 1].start() if i + 1 < len(splits) else len(text)
+        chunk_text = text[start:end].strip()
+        # Derive a short part_id from the heading
+        part_id = re.sub(r"^#+\s*", "", heading)
+        part_id = re.sub(r"[^\w\s-]", "", part_id).strip()[:60]
+        raw_chunks.append((part_id, chunk_text))
+
+    # Merge short sections into the next one
+    merged: list[dict] = []
+    carry_id = ""
+    carry_text = ""
+    for part_id, chunk_text in raw_chunks:
+        if carry_text:
+            carry_text = carry_text + "\n\n" + chunk_text
+            if len(carry_text) >= min_chars:
+                merged.append({"part_id": carry_id, "text": carry_text})
+                carry_id = ""
+                carry_text = ""
+        elif len(chunk_text) < min_chars:
+            carry_id = part_id
+            carry_text = chunk_text
+        else:
+            merged.append({"part_id": part_id, "text": chunk_text})
+
+    if carry_text:
+        if merged:
+            merged[-1]["text"] += "\n\n" + carry_text
+        else:
+            merged.append({"part_id": carry_id or "full_text", "text": carry_text})
+
+    return merged
+
+
 def chunk_by_tokens(text: str, max_tokens: int = 2000) -> list[dict]:
     """Split text into approximately equal chunks by word count.
 
@@ -155,6 +213,9 @@ def dispatch_chunking(text: str, chunking_config: dict) -> list[dict]:
         return chunk_by_chapter(text)
     elif strategy == "heading":
         return chunk_by_heading(text)
+    elif strategy == "section":
+        min_chars = chunking_config.get("min_section_chars", 200)
+        return chunk_by_section(text, min_chars)
     elif strategy == "token":
         max_tokens = chunking_config.get("max_tokens", 2000)
         return chunk_by_tokens(text, max_tokens)
@@ -184,6 +245,20 @@ def ingest(state: dict) -> dict:
     ))
 
     raw_text = acquire_text(source_config)
+
+    # ── Log arxiv metadata if applicable ──
+    if source_type == "arxiv":
+        from src.reader.arxiv_client import fetch_arxiv_metadata
+        arxiv_id = source_config["arxiv_id"]
+        metadata = fetch_arxiv_metadata(arxiv_id)
+        steps.append(create_step(
+            layer="reader",
+            node="ingestion",
+            action="arxiv_metadata",
+            input_summary=f"arxiv:{arxiv_id} — {metadata['title']}",
+            parsed_output=metadata,
+            reasoning=f"Paper by {', '.join(metadata['authors'][:3])}{'...' if len(metadata['authors']) > 3 else ''} ({metadata['published']})",
+        ))
 
     # ── Clean text ──
     if source_type == "gutenberg":

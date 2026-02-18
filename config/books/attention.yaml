@@ -1,0 +1,53 @@
+book:
+  title: "Attention Is All You Need"
+  title_ja: "Attention Is All You Need"
+  author: "Vaswani et al."
+  author_ja: "Vaswani ら"
+  year: 2017
+
+source:
+  type: "arxiv"
+  arxiv_id: "1706.03762"
+  cache_filename: "arxiv_1706.03762.md"
+
+chunking:
+  strategy: "section"
+  min_section_chars: 200
+
+research:
+  search_queries:
+    - "Transformer architecture deep learning attention mechanism"
+    - "Attention Is All You Need impact NLP"
+    - "self-attention multi-head attention explained"
+    - "Transformer vs RNN LSTM sequence modeling"
+  reference_files: []
+  max_search_results: 5
+
+context:
+  era: "2017"
+  tradition: "Deep Learning, Neural Machine Translation"
+  key_terms:
+    - "Transformer"
+    - "Self-Attention"
+    - "Multi-Head Attention"
+    - "Scaled Dot-Product Attention"
+    - "Positional Encoding"
+    - "Encoder-Decoder Architecture"
+    - "Layer Normalization"
+    - "Feed-Forward Network"
+  notable_critics:
+    - name: "Yann LeCun"
+      perspective: "Advocated for convolutional approaches; later acknowledged Transformer's dominance"
+    - name: "Yoshua Bengio"
+      perspective: "Contributed foundational attention work; explored Transformer extensions for reasoning"
+    - name: "Jürgen Schmidhuber"
+      perspective: "Argued that key ideas predate the Transformer, citing earlier linear attention work"
+
+prompt_fragments:
+  work_description: >
+    "Attention Is All You Need" (2017) introduced the Transformer architecture,
+    replacing recurrence and convolution with self-attention for sequence transduction.
+  analysis_guidance: >
+    Pay attention to: the motivation for removing recurrence, the scaled dot-product
+    attention mechanism, how multi-head attention enables diverse representations,
+    positional encoding strategies, and the encoder-decoder structure.
