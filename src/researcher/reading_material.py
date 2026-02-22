@@ -250,6 +250,7 @@ def generate_reading_material(state: dict) -> dict:
         concepts = analysis.get("concepts", [])
         concepts_text = "\n".join(
             f"- {c.get('name', '?')}: {c.get('description', '')[:200]}"
+            if isinstance(c, dict) else f"- {str(c)[:200]}"
             for c in concepts
         ) or "(none extracted)"
 
@@ -257,7 +258,12 @@ def generate_reading_material(state: dict) -> dict:
         arguments = analysis.get("arguments", [])
         arguments_parts = []
         for arg in arguments:
-            premises = "; ".join(arg.get("premises", []))
+            if isinstance(arg, str):
+                arguments_parts.append(f"- {arg[:200]}")
+                continue
+            premises = "; ".join(
+                p if isinstance(p, str) else str(p) for p in arg.get("premises", [])
+            )
             arguments_parts.append(
                 f"- [{arg.get('argument_type', '?')}] "
                 f"Premises: {premises[:200]} → Conclusion: {arg.get('conclusion', '')[:200]}"
@@ -268,6 +274,7 @@ def generate_reading_material(state: dict) -> dict:
         rhetorical = analysis.get("rhetorical_strategies", [])
         rhetorical_text = "\n".join(
             f"- {r.get('strategy_type', '?')}: {r.get('description', '')[:200]}"
+            if isinstance(r, dict) else f"- {str(r)[:200]}"
             for r in rhetorical
         ) or "(none extracted)"
 
@@ -338,6 +345,54 @@ def generate_reading_material(state: dict) -> dict:
 
         sections.append(f"## 第{section_num}章の詳細分析 —— {first_line[:60]}")
         sections.append(chapter_text)
+        sections.append("")
+
+    # ── 2b. Lateral drift section (optional) ────────────────────────
+    lateral_drifts = state.get("lateral_drifts", [])
+    if lateral_drifts:
+        print("      Generating lateral thinking section...")
+
+        drift_items = []
+        for d in lateral_drifts[:10]:
+            drift_items.append(
+                f"- [{d.get('domain', '?')}] **{d.get('title', '?')}** "
+                f"(concept: {d.get('concept_name', '?')}, "
+                f"drift score: {d.get('drift_score', 0):.3f})\n"
+                f"  {d.get('snippet', '')[:200]}\n"
+                f"  Source: {d.get('url', '')}"
+            )
+
+        lateral_text_for_prompt = "\n".join(drift_items)
+
+        lateral_prompt = (
+            f'You are an academic writer creating a "lateral thinking seeds" section '
+            f'for a study guide on "{book_title}" by {author}.\n\n'
+            f"The following items are cross-disciplinary discoveries that share structural "
+            f"or formal similarities with concepts in the text, but come from different domains.\n\n"
+            f"LATERAL DISCOVERIES:\n{lateral_text_for_prompt}\n\n"
+            f"Write a section (400-800 words in Japanese) that:\n"
+            f"1. Introduces the idea of lateral/cross-domain connections\n"
+            f"2. For each discovery, explains the structural parallel to the original concept\n"
+            f"3. Suggests how these parallels might deepen understanding of the original text\n\n"
+            f"Write in Japanese (日本語). Use an intellectually stimulating, exploratory tone.\n"
+            f"Do NOT add a top-level heading (# ...) — start directly with the content.\n\n"
+            f"Respond with ONLY the essay text, no JSON wrapping."
+        )
+
+        lateral_section_text = _strip_leading_headings(llm.invoke(lateral_prompt).content.strip())
+
+        steps.append(create_step(
+            layer="researcher",
+            node="reading_material",
+            action="generate_lateral_section",
+            input_summary=f"{len(lateral_drifts)} lateral drifts",
+            llm_prompt=lateral_prompt,
+            llm_raw_response=lateral_section_text,
+            parsed_output={"length": len(lateral_section_text)},
+        ))
+
+        sections.append("## 水平思考の種 —— 分野横断的な構造的類似性")
+        sections.append(lateral_section_text)
         sections.append("")
 
     # ── 3. Conclusion chapter ────────────────────────────────────────

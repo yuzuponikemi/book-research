@@ -47,6 +47,10 @@ context:
     - name: "Leibniz"
       perspective: "Criticized the Four Rules as oversimplified; proposed universal characteristic"
 
+lateral:
+  domain_hints: ["computer science", "cognitive science", "biology"]
+  include_arxiv: true
+
 prompt_fragments:
   work_description: >
     Descartes' "Discourse on the Method" (1637) is a foundational text of modern philosophy.

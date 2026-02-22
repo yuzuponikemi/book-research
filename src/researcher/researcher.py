@@ -193,7 +193,7 @@ def format_research_context(ctx: dict) -> str:
         value = ctx.get(key, "")
         if value:
             lines.append(f"## {heading}")
-            lines.append(value)
+            lines.append(str(value) if not isinstance(value, str) else value)
             lines.append("")
 
     web_sources = ctx.get("web_sources", [])

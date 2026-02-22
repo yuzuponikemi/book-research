@@ -142,6 +142,7 @@ class CogitoState(TypedDict):
     skip_research: bool
     skip_audio: bool
     skip_translate: bool
+    skip_lateral: bool
     deep_analysis: bool
 
     # Data Artifacts
@@ -151,6 +152,7 @@ class CogitoState(TypedDict):
     research_context: dict
     critique_report: dict
     enrichment: dict
+    lateral_drifts: list[dict]
     reading_material: str
     syllabus: dict
     scripts: list[dict]

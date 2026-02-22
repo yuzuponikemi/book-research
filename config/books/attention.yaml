@@ -43,6 +43,10 @@ context:
     - name: "Jürgen Schmidhuber"
       perspective: "Argued that key ideas predate the Transformer, citing earlier linear attention work"
 
+lateral:
+  domain_hints: ["neuroscience", "information theory", "linguistics"]
+  include_arxiv: true
+
 prompt_fragments:
   work_description: >
     "Attention Is All You Need" (2017) introduced the Transformer architecture,

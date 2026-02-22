@@ -159,7 +159,8 @@ def plan(state: dict) -> dict:
     steps = list(state.get("thinking_log", []))
 
     model = state.get("reader_model", "llama3")
-    llm = ChatOllama(model=model, temperature=0.3, num_ctx=16384, format="json")
+    num_ctx = 32768 if "qwen3" in model or "command-r" in model else 16384
+    llm = ChatOllama(model=model, temperature=0.3, num_ctx=num_ctx, format="json")
 
     book_config = state.get("book_config", {})
     book = book_config.get("book", {})

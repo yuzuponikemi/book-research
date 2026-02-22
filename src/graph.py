@@ -9,6 +9,7 @@ from src.reader.synthesizer import synthesize
 from src.researcher.researcher import research
 from src.critic.critic import critique
 from src.director.enricher import enrich
+from src.researcher.lateral_drift import lateral_drift
 from src.researcher.reading_material import generate_reading_material
 from src.director.planner import plan
 from src.dramaturg.scriptwriter import write_scripts
@@ -21,6 +22,13 @@ def should_research(state: CogitoState) -> str:
     if state.get("skip_research", False):
         return "plan"
     return "research"
+
+
+def should_lateral(state: CogitoState) -> str:
+    """Condition for lateral drift stage (within research branch)."""
+    if state.get("skip_lateral", False):
+        return "generate_reading_material"
+    return "lateral_drift"
 
 
 def should_audio(state: CogitoState) -> str:
@@ -67,6 +75,7 @@ def build_graph(checkpointer=None):
     graph.add_node("research", research)
     graph.add_node("critique", critique)
     graph.add_node("enrich", enrich)
+    graph.add_node("lateral_drift", lateral_drift)
     graph.add_node("generate_reading_material", generate_reading_material)
 
     # --- Layer 3: Director ---
@@ -98,7 +107,18 @@ def build_graph(checkpointer=None):
     # Research loop
     graph.add_edge("research", "critique")
     graph.add_edge("critique", "enrich")
-    graph.add_edge("enrich", "generate_reading_material")
+
+    # Conditional branching for Lateral Drift
+    graph.add_conditional_edges(
+        "enrich",
+        should_lateral,
+        {
+            "lateral_drift": "lateral_drift",
+            "generate_reading_material": "generate_reading_material",
+        },
+    )
+
+    graph.add_edge("lateral_drift", "generate_reading_material")
     graph.add_edge("generate_reading_material", "plan")
 
     # Planning to Scripting

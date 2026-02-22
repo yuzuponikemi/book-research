@@ -238,6 +238,24 @@ def format_scripts_report(scripts: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def format_lateral_report(drifts: list[dict]) -> str:
+    lines = ["# Lateral Vector Drift Report", ""]
+    lines.append(f"Total drifts: {len(drifts)}")
+    lines.append("")
+    for i, d in enumerate(drifts, 1):
+        lines.append(f"## [{i}] {d.get('title', '?')}")
+        lines.append(f"- **Concept:** {d.get('concept_name', '?')} (`{d.get('concept_id', '?')}`)")
+        lines.append(f"- **Domain:** {d.get('domain', '?')}")
+        lines.append(f"- **Source:** {d.get('source_type', '?')} — {d.get('url', '')}")
+        lines.append(f"- **Query:** {d.get('query', '')}")
+        lines.append(f"- **Similarity:** {d.get('similarity', 0):.4f} | "
+                     f"**Familiarity:** {d.get('familiarity', 0):.4f} | "
+                     f"**Drift Score:** {d.get('drift_score', 0):.4f}")
+        lines.append(f"\n> {d.get('snippet', '')[:300]}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Node metadata: label, file prefix, save callback
 # ---------------------------------------------------------------------------
@@ -312,6 +330,13 @@ NODE_META: dict[str, tuple] = {
             f"JA {len(s.get('enrichment',{}).get('enrichment_summary_ja',''))} chars"
         ),
     ),
+    "lateral_drift": (
+        "Lateral Drift",
+        "03d2_lateral_drifts",
+        "lateral_drifts",
+        format_lateral_report,
+        lambda s: f"{len(s.get('lateral_drifts', []))} drifts",
+    ),
     "generate_reading_material": (
         "Reading Material",
         "03e_reading_material",
@@ -375,6 +400,7 @@ ALL_NODES_ORDERED = [
     "research",
     "critique",
     "enrich",
+    "lateral_drift",
     "generate_reading_material",
     "plan",
     "write_scripts",
@@ -390,9 +416,14 @@ def _build_active_sequence(state: dict) -> list[str]:
     skip_audio = state.get("skip_audio", False)
     skip_translate = state.get("skip_translate", False)
 
+    skip_lateral = state.get("skip_lateral", False)
+
     seq = ["ingest", "analyze_chunks", "synthesize"]
     if not skip_research:
-        seq += ["research", "critique", "enrich", "generate_reading_material"]
+        seq += ["research", "critique", "enrich"]
+        if not skip_lateral:
+            seq.append("lateral_drift")
+        seq.append("generate_reading_material")
     seq.append("plan")
     seq.append("write_scripts")
     if not skip_audio:
@@ -467,6 +498,7 @@ def main():
     parser.add_argument("--skip-translate", action="store_true", help="Skip the translation step")
     parser.add_argument("--skip-research", action="store_true", help="Skip research/critique/enrichment stages")
     parser.add_argument("--skip-audio", action="store_true", help="Skip VOICEVOX audio synthesis stage")
+    parser.add_argument("--skip-lateral", action="store_true", help="Skip lateral vector drift stage")
     parser.add_argument("--deep-analysis", action="store_true", help="Enable agentic deep analysis with reflection loop")
     parser.add_argument("--trace", action="store_true", help="Enable Arize Phoenix tracing UI")
     parser.add_argument(
@@ -523,6 +555,7 @@ def main():
         "research_context": {},
         "critique_report": {},
         "enrichment": {},
+        "lateral_drifts": [],
         "reading_material": "",
         "mode": args.mode,
         "topic": args.topic,
@@ -536,6 +569,7 @@ def main():
         "translator_model": args.translator_model,
         "work_description": work_description,
         "skip_research": args.skip_research,
+        "skip_lateral": args.skip_lateral or args.skip_research,
         "skip_audio": args.skip_audio,
         "skip_translate": args.skip_translate,
         "deep_analysis": args.deep_analysis,
@@ -545,7 +579,9 @@ def main():
 
     # --- Count expected stages for progress display ---
     base_stages = 5  # ingest, analyze, synthesize, plan, script
-    research_stages = 0 if args.skip_research else 4
+    skip_lateral = args.skip_lateral or args.skip_research
+    lateral_stages = 0 if skip_lateral else 1
+    research_stages = 0 if args.skip_research else (4 + lateral_stages)
     audio_stages = 0 if args.skip_audio else 1
     translate_stages = 0 if args.skip_translate else 1
     total_stages = base_stages + research_stages + audio_stages + translate_stages
@@ -572,6 +608,8 @@ def main():
         print(f"  Translator   : {args.translator_model}")
     print(f"  Analysis     : {'deep (agentic)' if args.deep_analysis else 'standard'}")
     print(f"  Research     : {'skip' if args.skip_research else 'enabled'}")
+    if not args.skip_research:
+        print(f"  Lateral      : {'skip' if skip_lateral else 'enabled'}")
     print(f"  Audio        : {'skip' if args.skip_audio else 'VOICEVOX (localhost:50021)'}")
     if phoenix_session:
         print(f"  Tracing      : {phoenix_session.url}")
@@ -600,6 +638,7 @@ def main():
                 "work_description": work_description,
                 "persona_config": persona_config,
                 "skip_research": args.skip_research,
+                "skip_lateral": args.skip_lateral or args.skip_research,
                 "skip_audio": args.skip_audio,
                 "skip_translate": args.skip_translate,
                 "run_dir": str(run_dir),
@@ -702,6 +741,8 @@ def main():
         print(f"    03b_research_context.md   - Web search + reference materials")
         print(f"    03c_critique_report.md    - Critical perspectives")
         print(f"    03d_enriched_context.md   - Integrated context narrative")
+        if not skip_lateral:
+            print(f"    03d2_lateral_drifts.md    - Lateral vector drift discoveries")
         print(f"    03e_reading_material.md   - Comprehensive study guide")
     print(f"    04_syllabus.md            - Episode plan")
     print(f"    05_scripts.md             - Final dialogue scripts")

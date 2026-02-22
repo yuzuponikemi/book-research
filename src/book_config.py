@@ -90,6 +90,15 @@ def _apply_defaults(config: dict) -> None:
     ctx.setdefault("key_terms", [])
     ctx.setdefault("notable_critics", [])
 
+    config.setdefault("lateral", {})
+    lat = config["lateral"]
+    lat.setdefault("domain_hints", [])
+    lat.setdefault("max_results_per_concept", 3)
+    lat.setdefault("sim_low", 0.2)
+    lat.setdefault("sim_high", 0.5)
+    lat.setdefault("embedding_model", "nomic-embed-text")
+    lat.setdefault("include_arxiv", True)
+
     config.setdefault("prompt_fragments", {})
     pf = config["prompt_fragments"]
     pf.setdefault("work_description", f'{book["author"]}\'s "{book["title"]}"')
