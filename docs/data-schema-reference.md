@@ -1,3 +1,7 @@
+> [!WARNING]
+> **⚠️ OUTDATED — このドキュメントは旧スキーマ（`CogitoState` TypedDict）に基づいており、現在のPydanticマイクロサービススキーマには対応していません。**
+> 最新のスキーマは `cogito/schemas/` 内の各ファイルおよび [`docs/architecture-v2.md`](architecture-v2.md) を参照してください。
+
 # データスキーマリファレンス
 
 パイプラインの各ステージで生成される中間データの JSON スキーマ。

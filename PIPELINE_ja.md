@@ -1,3 +1,7 @@
+> [!WARNING]
+> **⚠️ OUTDATED — このドキュメントは旧アーキテクチャ（モノリシック `main.py`）に基づいており、現在のマイクロサービス構成には対応していません。**
+> 最新のアーキテクチャと使い方は [`docs/architecture-v2.md`](docs/architecture-v2.md) および [`docs/usage-guide-v2.md`](docs/usage-guide-v2.md) を参照してください。
+
 # Project Cogito - パイプラインガイド
 
 ## クイックスタート

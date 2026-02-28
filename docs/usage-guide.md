@@ -1,3 +1,7 @@
+> [!WARNING]
+> **⚠️ OUTDATED — このドキュメントは旧アーキテクチャ（モノリシック `main.py`）に基づいており、現在のマイクロサービス構成には対応していません。**
+> 最新の使い方は [`docs/usage-guide-v2.md`](usage-guide-v2.md) を参照してください。
+
 # 使い方ガイド
 
 Project Cogito を実際に動かすための手順書。

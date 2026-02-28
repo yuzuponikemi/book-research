@@ -1,3 +1,6 @@
+> [!NOTE]
+> **ℹ️ ログフォーマット（`ThinkingLog`）は新しいマイクロサービス構成でも互換性があります。** ただし `layer` 値として `"producer"` が新たに追加されています。既存の `"reader"`, `"director"`, `"dramaturg"` の内容は引き続き有効です。
+
 # ログファイル（Thinking Log）の解説
 
 Cogito パイプラインの実行ログは `logs/run_YYYYMMDD_HHMMSS.json` に保存される。

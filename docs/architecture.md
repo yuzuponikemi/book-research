@@ -1,3 +1,7 @@
+> [!WARNING]
+> **⚠️ OUTDATED — このドキュメントは旧アーキテクチャ（`src/` モノリスと `LangGraph` StateGraph）に基づいており、現在のマイクロサービス構成には対応していません。**
+> 最新のアーキテクチャは [`docs/architecture-v2.md`](architecture-v2.md) を参照してください。
+
 # パイプラインアーキテクチャ
 
 哲学テキストを分析し、日本語ポッドキャスト台本・音声を自動生成する LangGraph パイプライン。
