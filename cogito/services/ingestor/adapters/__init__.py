@@ -1,0 +1,1 @@
+"""Ingestor adapters package."""
