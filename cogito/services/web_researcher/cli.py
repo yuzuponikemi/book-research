@@ -44,7 +44,7 @@ def run(
     # ── Resolve subject and book_config ──────────────────────────────────────
     book_config: dict | None = None
     if book:
-        from src.book_config import load_book_config
+        from cogito.config.book_config import load_book_config
         book_config = load_book_config(book)
         bk = book_config.get("book", {})
         pf = book_config.get("prompt_fragments", {})

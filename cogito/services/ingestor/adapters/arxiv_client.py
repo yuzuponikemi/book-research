@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 from lxml import html as lxml_html
 
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
+DATA_DIR = Path(__file__).parent.parent.parent.parent.parent / "data"
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 AR5IV_HTML_URL = "https://ar5iv.labs.arxiv.org/html"

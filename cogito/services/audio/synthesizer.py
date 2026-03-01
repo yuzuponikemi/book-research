@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydub import AudioSegment
 
-from src.audio.voicevox_client import VoicevoxClient
+from cogito.services.audio.voicevox_client import VoicevoxClient
 
 # Silence durations (milliseconds)
 SILENCE_SAME_SPEAKER_MS = 600

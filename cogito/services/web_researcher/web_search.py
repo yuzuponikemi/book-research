@@ -9,9 +9,9 @@ Usage:
     results = search_duckduckgo(["query1"], max_results=5)
 
     # Test individual engines from CLI:
-    python3 -m src.researcher.web_search --engine tavily "Descartes Discourse on Method"
-    python3 -m src.researcher.web_search --engine duckduckgo "Descartes biography"
-    python3 -m src.researcher.web_search "auto select query"
+    python3 -m cogito.services.web_researcher.web_search --engine tavily "Descartes Discourse on Method"
+    python3 -m cogito.services.web_researcher.web_search --engine duckduckgo "Descartes biography"
+    python3 -m cogito.services.web_researcher.web_search "auto select query"
 """
 
 import os

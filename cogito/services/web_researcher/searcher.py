@@ -13,8 +13,8 @@ from dataclasses import dataclass
 
 from langchain_ollama import ChatOllama
 
-from src.logger import create_step, extract_json
-from src.researcher.web_search import search_batch
+from cogito.utils.logger import create_step, extract_json
+from cogito.services.web_researcher.web_search import search_batch
 from cogito.services.web_researcher.planner import Heading
 
 

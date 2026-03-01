@@ -12,7 +12,7 @@ from pathlib import Path
 
 import httpx
 
-from src.logger import create_step
+from cogito.utils.logger import create_step
 from cogito.schemas.chunks import Chunk, ChunksV1
 
 
@@ -50,7 +50,7 @@ def acquire_text(source_config: dict) -> str:
     elif source_type == "local_file":
         return load_local_file(source_config.get("path", cache_filename))
     elif source_type == "arxiv":
-        from src.reader.arxiv_client import fetch_arxiv_fulltext
+        from cogito.services.ingestor.adapters.arxiv_client import fetch_arxiv_fulltext
         arxiv_id = source_config["arxiv_id"]
         cache = cache_filename or f"arxiv_{arxiv_id.replace('/', '_')}.md"
         return fetch_arxiv_fulltext(arxiv_id, cache)

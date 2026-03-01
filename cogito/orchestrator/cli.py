@@ -1,19 +1,18 @@
 """Orchestrator CLI — the unified entry point replacing main.py.
 
-This is a thin wrapper that wires the cogito services together using
-file-based interfaces (JSON files), mirroring the existing main.py behaviour
-but composed from independent services.
+Wires the cogito services together via LangGraph (with SQLite checkpointing),
+mirroring the original main.py behaviour but composed from independent services.
 
 Usage:
-    # Route A: book text → podcast (equivalent to main.py default)
+    # Route A: book text → podcast (default)
     python -m cogito.orchestrator \\
         --book descartes_discourse --mode essence --persona descartes_default
 
-    # Route B: web research → podcast (NEW)
+    # Route B: web research → podcast
     python -m cogito.orchestrator \\
         --book descartes_discourse --source web --mode essence
 
-    # Route B with free-form subject:
+    # Free-form subject (no book config):
     python -m cogito.orchestrator \\
         --subject "ニーチェ ツァラトゥストラはこう言った" \\
         --source web --mode curriculum
@@ -23,6 +22,10 @@ Usage:
         --from-graph data/run_xxx/03_concept_graph.json \\
         --mode essence --persona socratic
 
+    # Resume an interrupted run:
+    python -m cogito.orchestrator \\
+        --resume run_20260101_120000
+
 Flags:
     --source      book | web           (default: book)
     --book        Book config name     (config/books/)
@@ -31,9 +34,11 @@ Flags:
     --topic       Topic for topic mode
     --persona     Persona preset name
     --from-graph  Skip ingestion/analysis, start from an existing concept graph
-    --output-dir  Where to save run outputs (default: data/run_YYYYMMDD_HHMMSS)
+    --resume      Resume a previously interrupted run by run_id
+    --from-node   When resuming, jump to a specific node name
     --reader-model     Ollama model for analysis / planning
     --dramaturg-model  Ollama model for script writing
+    --skip-research    Skip web research stage
     --skip-audio       Skip VOICEVOX audio synthesis
     --skip-translate   Skip Japanese translation
 """
@@ -42,22 +47,28 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
-import time
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 import yaml
+from langgraph.checkpoint.sqlite import SqliteSaver
 
+from cogito.orchestrator.graph import build_graph
+from cogito.orchestrator.state import CogitoState
 from cogito.schemas.concept_graph import ConceptGraphV1
 
 
-DATA_DIR  = Path(__file__).parent.parent.parent / "data"
+DATA_DIR   = Path(__file__).parent.parent.parent / "data"
 CONFIG_DIR = Path(__file__).parent.parent.parent / "config"
+CHECKPOINTS_DB = DATA_DIR / "checkpoints.db"
+
+THREAD_ID = "cogito"
 
 
 def _make_run_id() -> str:
-    from datetime import datetime
     return datetime.now().strftime("run_%Y%m%d_%H%M%S")
 
 
@@ -79,152 +90,145 @@ def _banner(run_id: str, source: str, args: argparse.Namespace) -> None:
     print()
 
 
-def _save_json(path: Path, data: dict | list) -> None:
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+def _load_persona_config(preset_name: str) -> dict:
+    """Load persona config dict from personas.yaml, injecting _preset key."""
+    personas_path = CONFIG_DIR / "personas.yaml"
+    with open(personas_path, encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    presets = config.get("presets", {})
+    if preset_name not in presets:
+        available = ", ".join(presets.keys())
+        raise ValueError(f"Unknown persona preset '{preset_name}'. Available: {available}")
+    data = dict(presets[preset_name])
+    data["_preset"] = preset_name
+    return data
 
 
-# ── Route A helpers ────────────────────────────────────────────────────────────
-
-def _run_route_a(args: argparse.Namespace, run_dir: Path) -> ConceptGraphV1:
-    """Ingestor → Analyst → ConceptGraphV1."""
-    from cogito.services.ingestor.adapters.book import ingest_from_book_config
-    from cogito.services.analyst.extractor import extract_all_chunks
-    from cogito.services.analyst.synthesizer import synthesize_concept_graph
-    from src.book_config import load_book_config
-
-    book_config = load_book_config(args.book)
-    bk = book_config.get("book", {})
-    pf = book_config.get("prompt_fragments", {})
-    work_description = pf.get(
-        "work_description",
-        f'{bk.get("author", "")}\'s "{bk.get("title", args.book)}"',
-    )
-    key_terms = book_config.get("context", {}).get("key_terms", [])
-    subject = work_description
-
-    print("[1/3] Ingesting text ...", flush=True)
-    chunks_v1, _log = ingest_from_book_config(book_config)
-    _save_json(run_dir / "01_chunks.json", chunks_v1.model_dump())
-    print(f"  → {len(chunks_v1.chunks)} chunks\n", flush=True)
-
-    print("[2/3] Extracting concepts ...", flush=True)
-    chunk_tuples = [(c.id, c.text) for c in chunks_v1.chunks]
-    analyses, _log2 = extract_all_chunks(
-        chunk_tuples, model=args.reader_model, key_terms=key_terms or None
-    )
-    _save_json(run_dir / "02_chunk_analyses.json", analyses)
-    print(flush=True)
-
-    print("[3/3] Synthesising concept graph ...", flush=True)
-    graph, _log3 = synthesize_concept_graph(
-        analyses, work_description=work_description, subject=subject, model=args.reader_model
-    )
-    return graph
-
-
-# ── Route B helper ─────────────────────────────────────────────────────────────
-
-def _run_route_b(args: argparse.Namespace, run_dir: Path) -> ConceptGraphV1:
-    """WebResearcher → ConceptGraphV1."""
-    from cogito.services.web_researcher.cli import run as wr_run
-
-    subject = getattr(args, "subject", None)
-    author = ""
-    book_config = None
-
-    if args.book:
-        from src.book_config import load_book_config
-        book_config_data = load_book_config(args.book)
-        bk = book_config_data.get("book", {})
-        pf = book_config_data.get("prompt_fragments", {})
-        subject = subject or pf.get(
-            "work_description",
-            f'{bk.get("author", "")}\'s "{bk.get("title", args.book)}"',
-        )
-        author = bk.get("author", "")
-
-    graph = wr_run(
-        output_path=run_dir / "03_concept_graph.json",
-        model=args.reader_model,
-        book=args.book,
-        subject=subject,
-        author=author,
-    )
-    return graph
-
-
-# ── Main ───────────────────────────────────────────────────────────────────────
-
-def run(args: argparse.Namespace) -> None:
-    run_id = _make_run_id()
+def _build_initial_state(args: argparse.Namespace, run_id: str) -> CogitoState:
+    """Construct the initial LangGraph state from CLI args."""
     run_dir = DATA_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    persona_config = _load_persona_config(args.persona)
+
+    # Resolve book config and work_description
+    book_config: dict = {}
+    work_description = getattr(args, "subject", None) or ""
+
+    if args.book:
+        from cogito.config.book_config import load_book_config
+        book_config = load_book_config(args.book)
+        book_config["_name"] = args.book
+        bk = book_config.get("book", {})
+        pf = book_config.get("prompt_fragments", {})
+        work_description = work_description or pf.get(
+            "work_description",
+            f'{bk.get("author", "")}\'s "{bk.get("title", args.book)}"',
+        )
+
     source = args.source
+    skip_research = args.skip_research or (source == "book")
 
-    _banner(run_id, source, args)
+    state: CogitoState = {
+        "book_config": book_config,
+        "book_title": book_config.get("book", {}).get("title", work_description),
+        "mode": args.mode,
+        "topic": args.topic,
+        "persona_config": persona_config,
+        "reader_model": args.reader_model,
+        "dramaturg_model": args.dramaturg_model,
+        "translator_model": args.translator_model,
+        "work_description": work_description,
+        "run_dir": str(run_dir),
+        "run_id": run_id,
+        "skip_research": skip_research,
+        "skip_audio": args.skip_audio,
+        "skip_translate": args.skip_translate,
+        "chunk_tuples": [],
+        "chunk_analyses": [],
+        "concept_graph_path": "",
+        "scripts": [],
+        "audio_metadata": [],
+        "thinking_log": [],
+    }
+    return state
 
-    # ── Concept graph ──────────────────────────────────────────────────────────
+
+def run(args: argparse.Namespace) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CHECKPOINTS_DB.parent.mkdir(parents=True, exist_ok=True)
+
+    # ── Resume an existing run ─────────────────────────────────────────────────
+    if args.resume:
+        run_id = args.resume
+        print(f"[RESUME] Resuming run {run_id} ...", flush=True)
+    else:
+        run_id = _make_run_id()
+
+    _banner(run_id, args.source, args)
+
+    # ── Build graph with SQLite checkpointing ──────────────────────────────────
+    conn = sqlite3.connect(str(CHECKPOINTS_DB))
+    checkpointer = SqliteSaver(conn)
+    graph = build_graph(checkpointer=checkpointer)
+
+    config = {"configurable": {"thread_id": run_id}}
+
+    # ── Handle --from-graph shortcut ───────────────────────────────────────────
     if args.from_graph:
-        print(f"[SKIP] Loading existing concept graph from {args.from_graph} ...", flush=True)
+        print(f"[SKIP] Loading concept graph from {args.from_graph} ...", flush=True)
         raw = json.loads(Path(args.from_graph).read_text(encoding="utf-8"))
         if "schema_version" in raw and "source_mode" in raw:
-            graph = ConceptGraphV1.model_validate(raw)
+            graph_obj = ConceptGraphV1.model_validate(raw)
         else:
-            graph = ConceptGraphV1.from_legacy_dict(
+            graph_obj = ConceptGraphV1.from_legacy_dict(
                 raw, subject=raw.get("subject", "unknown"),
                 source_mode="book", generated_by="analyst"
             )
-    elif source == "web":
-        graph = _run_route_b(args, run_dir)
-    else:
-        graph = _run_route_a(args, run_dir)
 
-    # Save canonical graph
-    cg_path = run_dir / "03_concept_graph.json"
-    cg_path.write_text(graph.model_dump_json(indent=2, exclude_none=True), encoding="utf-8")
-    print(f"\n  ConceptGraph: {len(graph.concepts)} concepts, "
-          f"{len(graph.relations)} relations, {len(graph.aporias)} aporias\n", flush=True)
+        run_dir = DATA_DIR / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        cg_path = run_dir / "03_concept_graph.json"
+        cg_path.write_text(graph_obj.model_dump_json(indent=2, exclude_none=True), encoding="utf-8")
 
-    # ── Producer ───────────────────────────────────────────────────────────────
-    from cogito.services.producer.cli import run as producer_run
+        # Bootstrap state and jump straight to produce
+        initial = _build_initial_state(args, run_id)
+        initial["concept_graph_path"] = str(cg_path)
 
-    book_meta = args.book
-    print("Producing podcast scripts ...", flush=True)
-    syllabus, scripts = producer_run(
-        input_path=cg_path,
-        output_dir=run_dir,
-        fmt="podcast",
-        mode=args.mode,
-        topic=args.topic,
-        persona_preset=args.persona,
-        planner_model=args.reader_model,
-        dramaturg_model=args.dramaturg_model,
-        book=book_meta,
-    )
-
-    # ── Optional: translation ──────────────────────────────────────────────────
-    if not args.skip_translate:
-        print("\nTranslating intermediate outputs ...", flush=True)
-        from src.translator import translate_intermediate_outputs
-        translate_intermediate_outputs(
-            run_dir, model=args.translator_model,
-            work_description=graph.subject,
+        # Inject state into checkpointer so graph can resume from 'produce'
+        from cogito.services.producer.cli import run as producer_run
+        producer_run(
+            input_path=cg_path,
+            output_dir=run_dir,
+            fmt="podcast",
+            mode=args.mode,
+            topic=args.topic,
+            persona_preset=args.persona,
+            planner_model=args.reader_model,
+            dramaturg_model=args.dramaturg_model,
+            book=args.book,
         )
+        _print_summary(run_id, DATA_DIR / run_id)
+        return
 
-    # ── Optional: audio ────────────────────────────────────────────────────────
-    if not args.skip_audio:
-        print("\nAudio synthesis is handled via the legacy pipeline.", flush=True)
-        print(f"  Run: python main.py --resume {run_id} --from-node synthesize_audio",
-              flush=True)
+    # ── Normal run or resume via LangGraph ────────────────────────────────────
+    if not args.resume:
+        initial_state = _build_initial_state(args, run_id)
+        result = graph.invoke(initial_state, config=config)
+    else:
+        # Resume: supply no input — LangGraph reloads from checkpoint
+        result = graph.invoke(None, config=config)
 
-    # ── Summary ────────────────────────────────────────────────────────────────
+    _print_summary(run_id, DATA_DIR / run_id)
+
+
+def _print_summary(run_id: str, run_dir: Path) -> None:
     print()
     print("=" * 60)
     print("  Done!")
     print("=" * 60)
     print(f"  Output : {run_dir}/")
-    print(f"  Resume : python main.py --resume {run_id} --from-node synthesize_audio")
+    print(f"  Run ID : {run_id}")
     print()
 
 
@@ -242,6 +246,8 @@ def main(argv: list[str] | None = None) -> None:
                          help="Skip ingestion, use existing ConceptGraphV1 JSON")
     parser.add_argument("--source", default="book", choices=["book", "web"],
                         help="Input source mode (default: book)")
+    parser.add_argument("--resume", default=None, metavar="RUN_ID",
+                        help="Resume a previously interrupted run by its run_id")
     # Producer
     parser.add_argument("--mode", default="essence",
                         choices=["essence", "curriculum", "topic"])
@@ -252,17 +258,19 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--dramaturg-model", default="qwen3-next")
     parser.add_argument("--translator-model", default="translategemma:12b")
     # Flags
+    parser.add_argument("--skip-research", action="store_true")
     parser.add_argument("--skip-translate", action="store_true")
     parser.add_argument("--skip-audio", action="store_true")
 
     args = parser.parse_args(argv)
 
-    if args.source == "web" and not args.book and not args.subject:
-        parser.error("--source web requires either --book or --subject")
-    if args.source == "book" and not args.book and not args.from_graph:
-        parser.error("--source book requires --book (or use --from-graph)")
-    if args.mode == "topic" and not args.topic:
-        parser.error("--topic is required when mode=topic")
+    if not args.resume:
+        if args.source == "web" and not args.book and not args.subject:
+            parser.error("--source web requires either --book or --subject")
+        if args.source == "book" and not args.book and not args.from_graph:
+            parser.error("--source book requires --book (or use --from-graph)")
+        if args.mode == "topic" and not args.topic:
+            parser.error("--topic is required when mode=topic")
 
     run(args)
 

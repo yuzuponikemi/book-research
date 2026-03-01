@@ -16,7 +16,7 @@ from cogito.schemas.chunks import ChunksV1
 
 
 def run(book: str, output_path: Path) -> ChunksV1:
-    from src.book_config import load_book_config
+    from cogito.config.book_config import load_book_config
     from cogito.services.ingestor.adapters.book import ingest_from_book_config
 
     print(f"  Loading book config: {book} ...", flush=True)

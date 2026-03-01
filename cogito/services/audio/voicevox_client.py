@@ -57,7 +57,7 @@ class VoicevoxClient:
 
 
 def main():
-    """CLI test: python3 -m src.audio.voicevox_client "テスト" --speaker 0"""
+    """CLI test: python3 -m cogito.services.audio.voicevox_client "テスト" --speaker 0"""
     parser = argparse.ArgumentParser(description="VOICEVOX client test")
     parser.add_argument("text", help="Text to synthesize")
     parser.add_argument("--speaker", type=int, default=0, help="Speaker ID (default: 0)")

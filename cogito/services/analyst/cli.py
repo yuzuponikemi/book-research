@@ -36,7 +36,7 @@ def _load_book_context(book_name: str) -> tuple[str, list[str]]:
         (work_description, key_terms)
     """
     try:
-        from src.book_config import load_book_config
+        from cogito.config.book_config import load_book_config
         book_config = load_book_config(book_name)
         book = book_config.get("book", {})
         pf = book_config.get("prompt_fragments", {})

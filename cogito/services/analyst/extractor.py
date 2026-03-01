@@ -13,7 +13,7 @@ import time
 
 from langchain_ollama import ChatOllama
 
-from src.logger import create_step, extract_json
+from cogito.utils.logger import create_step, extract_json
 
 
 MAX_RETRIES = 3

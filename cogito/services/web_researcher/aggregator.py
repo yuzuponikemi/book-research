@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 from langchain_ollama import ChatOllama
 
-from src.logger import create_step, extract_json
+from cogito.utils.logger import create_step, extract_json
 from cogito.services.web_researcher.planner import Heading
 from cogito.services.web_researcher.searcher import SearchResult
 

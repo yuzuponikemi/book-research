@@ -11,7 +11,7 @@ from typing import Literal
 
 from langchain_ollama import ChatOllama
 
-from src.logger import create_step, extract_json
+from cogito.utils.logger import create_step, extract_json
 from cogito.schemas.concept_graph import ConceptGraphV1
 from cogito.services.web_researcher.aggregator import SynthesizedChunk
 # Reuse the same LLM prompt — the output format is identical

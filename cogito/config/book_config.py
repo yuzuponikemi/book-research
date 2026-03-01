@@ -5,8 +5,8 @@ from pathlib import Path
 import yaml
 
 
-BOOKS_DIR = Path(__file__).parent.parent / "config" / "books"
-PROJECT_ROOT = Path(__file__).parent.parent
+BOOKS_DIR = Path(__file__).parent.parent.parent / "config" / "books"
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
 def load_book_config(book_name: str) -> dict:

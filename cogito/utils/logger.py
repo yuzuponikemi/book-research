@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 
-LOGS_DIR = Path(__file__).parent.parent / "logs"
+LOGS_DIR = Path(__file__).parent.parent.parent / "logs"
 
 
 class ThinkingStep(BaseModel):

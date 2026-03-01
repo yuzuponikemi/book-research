@@ -55,7 +55,7 @@ def _load_book_meta(book: str | None) -> tuple[str | None, str | None, str | Non
     if not book:
         return None, None, None, []
     try:
-        from src.book_config import load_book_config
+        from cogito.config.book_config import load_book_config
         bc = load_book_config(book)
         bk = bc.get("book", {})
         return (

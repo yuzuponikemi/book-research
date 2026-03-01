@@ -1,6 +1,6 @@
 """Visualize the current LangGraph topology."""
 
-from src.graph import build_graph
+from cogito.orchestrator.graph import build_graph
 
 def main():
     graph = build_graph()
