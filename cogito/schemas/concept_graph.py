@@ -119,10 +119,15 @@ class ConceptGraphV1(BaseModel):
 
         Used to wrap outputs from the existing pipeline during the migration period.
         """
-        # Cast ints/floats to strings in concepts' source_chunk to prevent Pydantic ValidationErrors
+        # Normalise source_chunk in each concept to prevent Pydantic ValidationErrors:
+        #   - missing → default to "COMBINED" (synthesizer merges across chunks)
+        #   - non-string → cast to str
         safe_concepts = []
         for c in data.get("concepts", []):
-            if "source_chunk" in c and not isinstance(c["source_chunk"], str):
+            c = dict(c)  # shallow copy to avoid mutating caller's data
+            if "source_chunk" not in c:
+                c["source_chunk"] = "COMBINED"
+            elif not isinstance(c["source_chunk"], str):
                 c["source_chunk"] = str(c["source_chunk"])
             safe_concepts.append(c)
 
