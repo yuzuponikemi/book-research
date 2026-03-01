@@ -119,11 +119,18 @@ class ConceptGraphV1(BaseModel):
 
         Used to wrap outputs from the existing pipeline during the migration period.
         """
+        # Cast ints/floats to strings in concepts' source_chunk to prevent Pydantic ValidationErrors
+        safe_concepts = []
+        for c in data.get("concepts", []):
+            if "source_chunk" in c and not isinstance(c["source_chunk"], str):
+                c["source_chunk"] = str(c["source_chunk"])
+            safe_concepts.append(c)
+
         return cls(
             subject=subject,
             source_mode=source_mode,
             generated_by=generated_by,
-            concepts=data.get("concepts", []),
+            concepts=safe_concepts,
             relations=data.get("relations", []),
             aporias=data.get("aporias", []),
             logic_flow=data.get("logic_flow", ""),
