@@ -1,4 +1,23 @@
 presets:
+  professor_student:
+    persona_a:
+      name: "Student"
+      role: "好奇心旺盛な学生"
+      description: "An intellectually curious student encountering this book for the first time, eager to understand but quick to raise practical objections"
+      tone: "率直・好奇心旺盛・時に懐疑的"
+      speaking_style: "Asks concrete questions, connects ideas to everyday life, occasionally pushes back"
+    persona_b:
+      name: "Professor"
+      role: "本の専門家・案内人"
+      description: "A professor deeply familiar with the book and its context, who explains ideas clearly and draws out deeper implications"
+      tone: "落ち着いた・明快・洞察力豊か"
+      speaking_style: "Explains with precision, uses examples, occasionally poses counter-questions to deepen understanding"
+    voice:
+      Student: 2      # 春日部つむぎ
+      Professor: 3    # 雨晴はう
+      _default_a: 2
+      _default_b: 3
+
   descartes_default:
     persona_a:
       name: "Host"

@@ -1,10 +1,12 @@
 """LangGraph wiring: cogito services as pipeline nodes.
 
 Topology:
-    ingest → analyze_chunks → synthesize_graph
-      → (if not skip_research) → web_research → produce
-      → (if skip_research) → produce
-    produce → write_scripts
+    route
+      → (if source==web) → web_research → produce
+      → (if source==book) → ingest → analyze_chunks → synthesize_graph
+          → (if not skip_research) → web_research → produce
+          → (if skip_research) → produce
+    produce
       → (if not skip_audio) → synthesize_audio → check_translate
       → (if skip_audio) → check_translate
     check_translate
@@ -153,6 +155,14 @@ def _check_translate_noop(state: CogitoState) -> dict:
 
 # ── Conditional edge functions ─────────────────────────────────────────────────
 
+def should_start(state: CogitoState) -> str:
+    """Route to web_research directly when source type is 'web', else ingest text."""
+    source_type = state.get("book_config", {}).get("source", {}).get("type", "")
+    if source_type == "web":
+        return "web_research"
+    return "ingest"
+
+
 def should_research(state: CogitoState) -> str:
     if state.get("skip_research", False):
         return "produce"
@@ -181,6 +191,7 @@ def build_graph(checkpointer=None):
     graph = StateGraph(CogitoState)
 
     # Nodes
+    graph.add_node("route", lambda s: {})
     graph.add_node("ingest", node_ingest)
     graph.add_node("analyze_chunks", node_analyze_chunks)
     graph.add_node("synthesize_graph", node_synthesize_graph)
@@ -190,12 +201,20 @@ def build_graph(checkpointer=None):
     graph.add_node("check_translate", _check_translate_noop)
     graph.add_node("translate", node_translate)
 
-    # Edges: ingestion → analysis → synthesis
-    graph.set_entry_point("ingest")
+    # Entry: route by source type
+    graph.set_entry_point("route")
+    graph.add_conditional_edges(
+        "route",
+        should_start,
+        {
+            "ingest": "ingest",
+            "web_research": "web_research",
+        },
+    )
+
+    # Book path: ingest → analyze_chunks → synthesize_graph → (research or produce)
     graph.add_edge("ingest", "analyze_chunks")
     graph.add_edge("analyze_chunks", "synthesize_graph")
-
-    # Conditional: book analysis OR web research → produce
     graph.add_conditional_edges(
         "synthesize_graph",
         should_research,

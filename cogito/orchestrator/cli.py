@@ -168,7 +168,7 @@ def run(args: argparse.Namespace) -> None:
     _banner(run_id, args.source, args)
 
     # ── Build graph with SQLite checkpointing ──────────────────────────────────
-    conn = sqlite3.connect(str(CHECKPOINTS_DB))
+    conn = sqlite3.connect(str(CHECKPOINTS_DB), check_same_thread=False)
     checkpointer = SqliteSaver(conn)
     graph = build_graph(checkpointer=checkpointer)
 
@@ -252,7 +252,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--mode", default="essence",
                         choices=["essence", "curriculum", "topic"])
     parser.add_argument("--topic", default=None)
-    parser.add_argument("--persona", default="descartes_default")
+    parser.add_argument("--persona", default="professor_student")
     # Models
     parser.add_argument("--reader-model", default="llama3")
     parser.add_argument("--dramaturg-model", default="qwen3-next")

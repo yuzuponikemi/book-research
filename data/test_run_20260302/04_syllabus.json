@@ -1,0 +1,21 @@
+{
+  "mode": "essence",
+  "episodes": [
+    {
+      "episode_number": 1,
+      "title": "The Quest for Certainty",
+      "theme": "How can one know what is true?",
+      "concept_ids": [
+        "reason",
+        "methodological_skepticism"
+      ],
+      "aporia_ids": [
+        "how_to_know_the_truth",
+        "uncertainty_of_opinions"
+      ],
+      "cliffhanger": "Can we ever truly be certain of our own opinions, or are they always subject to doubt and revision?",
+      "cognitive_bridge": "This idea connects to modern life through the rise of misinformation and disinformation online, where it's crucial to develop critical thinking skills to navigate the digital landscape."
+    }
+  ],
+  "meta_narrative": "The journey explores the author's philosophical inquiry into the nature of truth, reason, and skepticism, as he grapples with the fundamental question of how we can know what is true."
+}
