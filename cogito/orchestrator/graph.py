@@ -103,6 +103,7 @@ def node_web_research(state: CogitoState) -> dict:
     graph = wr_run(
         output_path=cg_path,
         model=state["reader_model"],
+        guide_model=state["dramaturg_model"],
         book=book_name,
         subject=work_description,
         author=author,

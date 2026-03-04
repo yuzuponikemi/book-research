@@ -14,8 +14,61 @@ from langchain_ollama import ChatOllama
 from cogito.utils.logger import create_step, extract_json
 from cogito.schemas.concept_graph import ConceptGraphV1
 from cogito.services.web_researcher.aggregator import SynthesizedChunk
-# Reuse the same LLM prompt — the output format is identical
-from cogito.services.analyst.synthesizer import SYNTHESIS_PROMPT
+
+
+# Web-researcher-specific synthesis prompt.
+# Unlike the analyst path (which receives pre-extracted concepts), here each
+# chunk is a summarised web-research section keyed to one explicit heading.
+# The prompt guarantees: one concept per heading minimum, then cross-heading
+# relations and aporias, matching the ConceptGraphV1 schema.
+WEB_SYNTHESIS_PROMPT = """\
+You are building a concept graph from web research on the following subject:
+{work_description}
+
+The research was structured around {chunk_count} explicit headings. \
+Each heading represents a distinct concept area of the book/subject. \
+You MUST produce at least one concept per heading — do not merge or drop headings.
+
+--- RESEARCH SECTIONS ---
+{analyses_json}
+--- END SECTIONS ---
+
+Your tasks:
+
+1. **Extract concepts**: For EACH section/heading, extract 1-2 core concepts. \
+   Write the concept name and description in ENGLISH (translate Japanese terms as needed, \
+   but keep key Japanese terms in parentheses). \
+   Only merge two concepts from DIFFERENT headings if they are absolutely identical — \
+   otherwise keep them separate. Aim for {min_concepts}-{max_concepts} total concepts.
+
+2. **Build relations**: For every meaningful conceptual link across headings, \
+   add a relation with type "depends_on", "contradicts", or "evolves_into". \
+   Aim for at least {min_relations} relations.
+
+3. **Identify aporias**: List 3-6 unresolved tensions or open questions the work raises.
+
+4. **Logic flow**: Write a 6-8 sentence narrative tracing the work's reasoning from \
+   first principles to its conclusions.
+
+5. **Core frustration**: One sentence capturing the central unresolved intellectual tension.
+
+Respond ONLY with valid JSON:
+{{
+  "concepts": [
+    {{"id": "slug", "name": "Concept Name", "description": "2-3 sentences.", \
+"original_quotes": [], "source_chunk": "heading_id"}}
+  ],
+  "relations": [
+    {{"source": "slug", "target": "slug", \
+"relation_type": "depends_on|contradicts|evolves_into", "evidence": "..."}}
+  ],
+  "aporias": [
+    {{"id": "aporia1", "question": "...", "context": "...", "related_concepts": ["slug"]}}
+  ],
+  "logic_flow": "...",
+  "core_frustration": "..."
+}}
+"""
 
 
 def synthesize_from_chunks(
@@ -25,9 +78,10 @@ def synthesize_from_chunks(
 ) -> tuple[ConceptGraphV1, list[dict]]:
     """Build a ConceptGraphV1 from web-research synthesized chunks.
 
-    The SynthesizedChunks are first converted to the same JSON format that
-    the Analyst's extractor would produce, then the same synthesis prompt
-    is applied — ensuring the output schema is identical regardless of route.
+    Each SynthesizedChunk corresponds to one explicit heading.  The
+    web-researcher-specific prompt guarantees at least one concept per heading,
+    preventing the over-merging that occurs when the analyst prompt is reused
+    with empty pre-extracted concepts.
 
     Args:
         chunks:  Output of aggregator.aggregate_headings().
@@ -37,34 +91,34 @@ def synthesize_from_chunks(
     Returns:
         (ConceptGraphV1, thinking_log_entries)
     """
-    # Convert SynthesizedChunks into a "pseudo chunk_analyses" format
-    # so the SYNTHESIS_PROMPT can operate on them directly.
-    pseudo_analyses = [
+    sections = [
         {
             "chunk_index": i,
             "heading_id": c.heading_id,
             "heading_title": c.heading_title,
-            # The summary_text serves as both the source content and a pre-extracted summary
-            "concepts": [],   # will be inferred by the synthesis LLM
-            "aporias": [],
-            "relations": [],
-            "logic_flow": c.summary_text,
-            "sources": c.sources,
+            "summary": c.summary_text,
         }
         for i, c in enumerate(chunks)
     ]
 
-    analyses_json = json.dumps(pseudo_analyses, ensure_ascii=False, indent=2)
+    analyses_json = json.dumps(sections, ensure_ascii=False, indent=2)
     if len(analyses_json) > 30000:
         analyses_json = analyses_json[:30000] + "\n... (truncated)"
+
+    min_concepts = len(chunks)          # at least one per heading
+    max_concepts = len(chunks) * 2
+    min_relations = max(8, len(chunks))
 
     num_ctx = 32768 if any(m in model for m in ("qwen3", "command-r")) else 16384
     llm = ChatOllama(model=model, temperature=0.1, num_ctx=num_ctx, format="json")
 
-    prompt = SYNTHESIS_PROMPT.format(
+    prompt = WEB_SYNTHESIS_PROMPT.format(
         chunk_count=len(chunks),
         analyses_json=analyses_json,
         work_description=subject,
+        min_concepts=min_concepts,
+        max_concepts=max_concepts,
+        min_relations=min_relations,
     )
 
     raw_response = llm.invoke(prompt).content

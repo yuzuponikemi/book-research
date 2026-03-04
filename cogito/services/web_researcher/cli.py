@@ -29,15 +29,18 @@ from cogito.services.web_researcher.planner import plan_headings
 from cogito.services.web_researcher.searcher import search_headings
 from cogito.services.web_researcher.aggregator import aggregate_headings
 from cogito.services.web_researcher.synthesizer import synthesize_from_chunks
+from cogito.services.web_researcher.guide_writer import write_book_guide
 
 
 def run(
     output_path: Path,
     model: str = "llama3",
+    guide_model: str = "qwen3-next",
     book: str | None = None,
     subject: str | None = None,
     author: str = "",
     max_results_per_query: int = 4,
+    skip_guide: bool = False,
 ) -> ConceptGraphV1:
     """Programmatic entry point."""
 
@@ -89,7 +92,7 @@ def run(
     print("[4/4] Synthesizing concept graph ...", flush=True)
     graph, log4 = synthesize_from_chunks(chunks, subject=subject, model=model)
 
-    # ── Save output ───────────────────────────────────────────────────────────
+    # ── Save concept graph ────────────────────────────────────────────────────
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         graph.model_dump_json(indent=2, exclude_none=True),
@@ -102,6 +105,22 @@ def run(
           f"{len(graph.relations)} relations, "
           f"{len(graph.aporias)} aporias")
     print(f"{'='*60}\n")
+
+    # ── Step 5: Generate book guide ───────────────────────────────────────────
+    if not skip_guide:
+        print("[5/5] Writing book guide ...", flush=True)
+        guide_path = output_path.parent / "book_guide.md"
+        write_book_guide(
+            chunks=chunks,
+            headings=headings,
+            graph=graph,
+            output_path=guide_path,
+            book_config=book_config,
+            model=guide_model,
+        )
+        print(f"\n{'='*60}")
+        print(f"  Book guide written to {guide_path}")
+        print(f"{'='*60}\n")
 
     return graph
 

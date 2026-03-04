@@ -19,22 +19,23 @@ from cogito.schemas.production import SyllabusV1
 # ── Prompts (identical to src/director/planner.py) ───────────────────────────
 
 ESSENCE_PROMPT = """\
-You are a podcast director designing a single, powerful episode about a notable work.
+You are a podcast director designing a single, comprehensive episode about a notable work.
 
-Given the concept graph below, select the SINGLE most important aporia (unresolved tension) \
-and the 2-3 core concepts most essential to understanding it. This episode should capture \
-the beating heart of the entire work.
+Given the concept graph below, design ONE episode that covers ALL concepts in the graph.
+This episode should give listeners a complete understanding of the entire work in one sitting.
 
 IMPORTANT: Write ALL output in English. Do NOT write in Japanese.
+IMPORTANT: concept_ids MUST include ALL concept IDs from the graph — do not omit any.
+IMPORTANT: aporia_ids should include ALL aporia IDs from the graph.
 
 CONCEPT GRAPH:
 {concept_graph_json}
 
 Design one episode with:
-- title: A compelling English title that captures the episode's essence
-- theme: The central tension explored (in English)
-- concept_ids: The 2-3 most important concept IDs (must match IDs from the concept graph)
-- aporia_ids: The 1-2 most important aporia IDs (must match IDs from the concept graph)
+- title: A compelling English title that captures the work's full scope
+- theme: The overarching tension that unifies all concepts (in English)
+- concept_ids: ALL concept IDs from the concept graph (every single one)
+- aporia_ids: ALL aporia IDs from the concept graph
 - cliffhanger: A thought-provoking question to leave listeners with (in English)
 - cognitive_bridge: How this idea connects to modern life — technology, AI, social media, etc. (in English)
 
