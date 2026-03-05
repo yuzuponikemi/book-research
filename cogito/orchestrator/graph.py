@@ -22,11 +22,13 @@ from pathlib import Path
 from langgraph.graph import StateGraph, END
 
 from cogito.orchestrator.state import CogitoState
+from cogito.utils import event_log
 
 
 # ── Node implementations ───────────────────────────────────────────────────────
 
 def node_ingest(state: CogitoState) -> dict:
+    event_log.step("orchestrator/graph", "→ node: ingest")
     from cogito.config.book_config import load_book_config
     from cogito.services.ingestor.adapters.book import ingest_from_book_config
 
@@ -48,6 +50,7 @@ def node_ingest(state: CogitoState) -> dict:
 
 
 def node_analyze_chunks(state: CogitoState) -> dict:
+    event_log.step("orchestrator/graph", "→ node: analyze_chunks")
     from cogito.services.analyst.extractor import extract_all_chunks
 
     key_terms = state.get("book_config", {}).get("context", {}).get("key_terms") or None
@@ -68,6 +71,7 @@ def node_analyze_chunks(state: CogitoState) -> dict:
 
 
 def node_synthesize_graph(state: CogitoState) -> dict:
+    event_log.step("orchestrator/graph", "→ node: synthesize_graph")
     from cogito.services.analyst.synthesizer import synthesize_concept_graph
 
     work_description = state.get("work_description", state.get("book_title", "unknown"))
@@ -90,6 +94,7 @@ def node_synthesize_graph(state: CogitoState) -> dict:
 
 
 def node_web_research(state: CogitoState) -> dict:
+    event_log.step("orchestrator/graph", "→ node: web_research")
     from cogito.services.web_researcher.cli import run as wr_run
 
     run_dir = Path(state["run_dir"])
@@ -116,6 +121,7 @@ def node_web_research(state: CogitoState) -> dict:
 
 
 def node_produce(state: CogitoState) -> dict:
+    event_log.step("orchestrator/graph", "→ node: produce")
     from cogito.services.producer.cli import run as producer_run
 
     run_dir = Path(state["run_dir"])

@@ -15,7 +15,11 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+import time
+
 from langchain_ollama import ChatOllama
+
+from cogito.utils import event_log
 
 from cogito.utils.logger import create_step, extract_json
 from cogito.services.web_researcher.web_search import search_batch
@@ -263,7 +267,9 @@ def discover_structure(
             author=author,
             chapters_json=json.dumps(chapters_input, ensure_ascii=False, indent=2),
         )
+        _t0 = time.time()
         raw_resp = llm.invoke(prompt).content
+        event_log.llm("web_researcher/planner", "enrich_chapter_descriptions", model, time.time() - _t0)
         parsed_enrich = extract_json(raw_resp)
         enriched = parsed_enrich.get("chapters", [])
     except Exception:
@@ -383,7 +389,9 @@ def plan_headings(
         subject=subject, author=author, key_terms_block=key_terms_block
     )
 
+    _t0 = time.time()
     raw_response = llm.invoke(prompt).content
+    event_log.llm("web_researcher/planner", "infer_headings", model, time.time() - _t0)
     parsed: dict | None = None
     error: str | None = None
     try:

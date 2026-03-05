@@ -9,7 +9,11 @@ from __future__ import annotations
 import json
 from typing import Literal
 
+import time
+
 from langchain_ollama import ChatOllama
+
+from cogito.utils import event_log
 
 from cogito.utils.logger import create_step, extract_json
 from cogito.schemas.concept_graph import ConceptGraphV1
@@ -121,7 +125,9 @@ def synthesize_from_chunks(
         min_relations=min_relations,
     )
 
+    _t0 = time.time()
     raw_response = llm.invoke(prompt).content
+    event_log.llm("web_researcher/synthesizer", "synthesize_concept_graph", model, time.time() - _t0)
     parsed: dict | None = None
     error: str | None = None
     try:

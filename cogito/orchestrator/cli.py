@@ -69,6 +69,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from cogito.orchestrator.graph import build_graph
 from cogito.orchestrator.state import CogitoState
 from cogito.schemas.concept_graph import ConceptGraphV1
+from cogito.utils import event_log
 
 
 DATA_DIR   = Path(__file__).parent.parent.parent / "data"
@@ -177,6 +178,12 @@ def run(args: argparse.Namespace) -> None:
 
     _banner(run_id, args.source, args)
 
+    # ── Initialise event log ───────────────────────────────────────────────────
+    run_dir_early = DATA_DIR / run_id
+    run_dir_early.mkdir(parents=True, exist_ok=True)
+    event_log.init(run_dir_early)
+    event_log.step("orchestrator", f"run started  book={getattr(args, 'book', None) or getattr(args, 'subject', '?')}")
+
     # ── Build graph with SQLite checkpointing ──────────────────────────────────
     conn = sqlite3.connect(str(CHECKPOINTS_DB), check_same_thread=False)
     checkpointer = SqliteSaver(conn)
@@ -218,6 +225,7 @@ def run(args: argparse.Namespace) -> None:
             dramaturg_model=args.dramaturg_model,
             book=args.book,
         )
+        event_log.save()
         _print_summary(run_id, DATA_DIR / run_id)
         return
 
@@ -229,6 +237,7 @@ def run(args: argparse.Namespace) -> None:
         # Resume: supply no input — LangGraph reloads from checkpoint
         result = graph.invoke(None, config=config)
 
+    event_log.save()
     _print_summary(run_id, DATA_DIR / run_id)
 
 
@@ -265,7 +274,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--persona", default="professor_student")
     # Models
     parser.add_argument("--reader-model", default="llama3")
-    parser.add_argument("--dramaturg-model", default="qwen3-next")
+    parser.add_argument("--dramaturg-model", default="qwen3-coder-next")
     parser.add_argument("--translator-model", default="translategemma:12b")
     # Flags
     parser.add_argument("--skip-research", action="store_true")

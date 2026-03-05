@@ -35,7 +35,7 @@ from cogito.services.web_researcher.guide_writer import write_book_guide
 def run(
     output_path: Path,
     model: str = "llama3",
-    guide_model: str = "qwen3-next",
+    guide_model: str = "qwen3-coder-next",
     book: str | None = None,
     subject: str | None = None,
     author: str = "",

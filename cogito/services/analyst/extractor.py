@@ -13,6 +13,8 @@ import time
 
 from langchain_ollama import ChatOllama
 
+from cogito.utils import event_log
+
 from cogito.utils.logger import create_step, extract_json
 
 
@@ -88,9 +90,12 @@ TEXT CHUNK ({part_id}):
 def _invoke_with_retry(llm: ChatOllama, prompt: str, label: str,
                        max_retries: int = MAX_RETRIES) -> str:
     """Invoke LLM with retry logic to handle Ollama hangs."""
+    _t0 = time.time()
     for attempt in range(max_retries):
         try:
-            return llm.invoke(prompt).content
+            result = llm.invoke(prompt).content
+            event_log.llm("analyst/extractor", label, llm.model, time.time() - _t0)
+            return result
         except Exception as e:
             if attempt < max_retries - 1:
                 wait = 10 * (attempt + 1)

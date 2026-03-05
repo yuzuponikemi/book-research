@@ -1,0 +1,20 @@
+book:
+  title: "「風の谷」という希望"
+  title_ja: "「風の谷」という希望"
+  author: "安宅和人"
+  author_ja: "安宅和人"
+  year: 2022
+
+source:
+  type: "web"
+
+chunking:
+  strategy: "token"
+  max_tokens: 15000
+
+research:
+  search_queries:
+    - "安宅和人 風の谷という希望 本"
+    - "安宅和人 風の谷という希望 目次 内容"
+  reference_files: []
+  max_search_results: 5

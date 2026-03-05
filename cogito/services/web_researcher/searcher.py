@@ -11,7 +11,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+import time
+
 from langchain_ollama import ChatOllama
+
+from cogito.utils import event_log
 
 from cogito.utils.logger import create_step, extract_json
 from cogito.services.web_researcher.web_search import search_batch
@@ -56,7 +60,9 @@ def generate_queries(
         heading_description=heading.description or heading.title,
     )
     try:
+        _t0 = time.time()
         raw = llm.invoke(prompt).content
+        event_log.llm("web_researcher/searcher", f"generate_queries: {heading.title[:30]}", model, time.time() - _t0)
         parsed = extract_json(raw)
         return parsed.get("queries", [])
     except Exception:

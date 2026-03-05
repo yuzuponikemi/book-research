@@ -9,9 +9,12 @@ Output: book_guide.md  (in the same directory as 03_concept_graph.json)
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from langchain_ollama import ChatOllama
+
+from cogito.utils import event_log
 
 from cogito.schemas.concept_graph import ConceptGraphV1
 from cogito.services.web_researcher.aggregator import SynthesizedChunk
@@ -40,27 +43,19 @@ INTRO_PROMPT = """\
 
 ---
 
-以下の構成でブックガイドの序論をMarkdownで執筆してください（JSONは不要）。
+**執筆指示:**
+以下の構成でブックガイドの序論をMarkdownで執筆してください。指示文をそのまま出力しないこと。JSONは不要。
 
-# {book_title_ja} ブックガイド
+1. `# {book_title_ja} ブックガイド` で始める
+2. `## 序論：{intro_subtitle}` の見出し
+3. 200字程度の段落①：現代における本書の意義と問題提起
+4. 200字程度の段落②：著者の中心的テーゼと本書が解き明かす核心
+5. `## 本書の構成と読解フェーズ` の見出し
+6. Markdown表（列：章番号、見出しタイトル、読解フェーズ、主なキーワード）
+7. `## このガイドの使い方` の見出し
+8. 100字程度のガイダンス段落
 
-## 序論：{intro_subtitle}
-
-（書き出し）現代における本書の意義と問題提起（200字程度）
-
-（テーゼ）著者が再定義する勉強観の核心（200字程度）
-
-## 本書の構成と学習フェーズ
-
-（章タイトルと学習フェーズのMarkdown表。列：章番号、見出しタイトル、学習フェーズ、主なキーワード）
-
-## このガイドの使い方
-
-（読者へのガイダンス：100字程度）
-
----
-
-Markdownのみで回答してください。タイトルは上記の # ... で始めること。
+Markdownのみで回答。上記の数字リストや指示文を出力に含めないこと。
 """
 
 SECTION_PROMPT = """\
@@ -86,29 +81,20 @@ SECTION_PROMPT = """\
 
 ---
 
-以下の構成でこのセクションをMarkdownで執筆してください（JSONは不要）。
+**執筆指示:**
+以下の構成でこのセクションをMarkdownで執筆してください。JSONは不要です。指示文をそのまま出力しないこと。
 
-## 第{section_num}章 {heading_title}
+1. `## 第{section_num}章 {heading_title}` で始める（この ## 見出し行は必ず出力すること）
+2. 冒頭150-200字のイントロ段落（このセクションの問いと意義を述べる）
+3. `### [著者の主張の核心を表すサブセクションタイトル]`（300-400字の詳細解説。著者の主張を忠実に再現しつつ、哲学的背景・類似概念・関連思想家も補足）
+4. `### [別の角度からの掘り下げ（メカニズム、危険性、実践的含意など）]`（300-400字の詳細解説。具体例を2-3個含める。現代的事例も歓迎）
+5. `### [他セクションとの接続または本セクションの小括]`（100-150字の締めくくりと次章への橋渡し）
 
-（イントロダクション：このセクションの問いと意義。150-200字）
-
-### [著者の主張の核心を表すサブセクションタイトル]
-
-（詳細解説。著者の主張を忠実に再現しつつ、哲学的背景・類似概念・関連思想家も補足。300-400字）
-
-### [別の角度からの掘り下げ（例：メカニズム、危険性、実践的含意など）]
-
-（詳細解説。具体例を2-3個含める。現代的事例も歓迎。300-400字）
-
-### [他セクションとの接続または本セクションの小括]
-
-（このセクションの締めくくりと、次章への橋渡し。100-150字）
-
-**執筆要件:**
+**品質要件:**
 - 日本語の専門概念には英訳を（カッコ）内に付ける
 - 学術的だが一般読者にも読みやすい文体
 - Markdownのみで回答（JSONは不要）
-- 第{section_num}章の ## 見出しで始めること
+- 上記の指示文・説明文を出力に含めないこと
 """
 
 CHECKLIST_PROMPT = """\
@@ -116,6 +102,10 @@ CHECKLIST_PROMPT = """\
 
 ## 書籍
 タイトル: {book_title_ja}（著者: {author_ja}）
+全体テーマ: {work_description}
+
+## 本書の章構成（実際の章タイトルを使うこと）
+{headings_list}
 
 ## 本書の未解決の問い（アポリア）
 {aporias_text}
@@ -128,31 +118,34 @@ CHECKLIST_PROMPT = """\
 
 ---
 
-本書の読者が「変身（Transformation）」を実践するための具体的なチェックリストを
-Markdownで執筆してください（JSONは不要）。
+**執筆指示:**
+本書『{book_title_ja}』の読者が本書の思想・洞察を実際に活かすための具体的なチェックリストをMarkdownで執筆してください。
+上記「章構成」に記載された実際の章タイトルを使って、各フェーズが対応する章を明示すること。
+指示文・説明文はそのまま出力しないこと。JSONは不要。
 
-## 実践ガイド：「来たるべきバカ」になるためのチェックリスト
+出力形式:
 
-（概要：100字程度）
+## 実践ガイド：『{book_title_ja}』を読んで実践するためのチェックリスト
 
-### フェーズ1：[最初のフェーズ名]（対応章：第X章）
+（本書の要点と実践の意義を100字程度で述べる段落）
+
+### フェーズ1：[第1-2章に対応したフェーズ名]
 
 - [ ] （具体的なアクション）
 - [ ] （具体的なアクション）
 - [ ] （具体的なアクション）
 
-### フェーズ2：[次のフェーズ名]
+### フェーズ2：[第3-5章に対応したフェーズ名]
 
 - [ ] ...
 
-### フェーズ3：[最終フェーズ名]
+### フェーズ3：[第6-8章に対応したフェーズ名]
 
 - [ ] ...
 
-（締めくくり：本書の意義を一文で）
+（本書の意義を一文で述べる締めくくり）
 
-**要件:** 抽象的な言葉ではなく、読者が明日から実践できる具体的な行動レベルで記述すること。
-Markdownのみで回答。
+**品質要件:** 本書固有の概念・論理展開に基づいて記述すること。読者が明日から実践できる具体的な行動レベルで記述すること。Markdownのみで回答。
 """
 
 
@@ -241,8 +234,15 @@ def write_book_guide(
         f"  {i+1}. {c.heading_title}"
         for i, c in enumerate(chunks)
     )
-    # Derive a subtitle from core_frustration or logic_flow
-    intro_subtitle = "自己破壊としての勉強――現代における「変身」の意義"
+    # Derive a subtitle from work_description (Japanese from book config) or logic_flow
+    if work_description and len(work_description) > 10:
+        # Take first sentence or up to 40 chars
+        first_sentence = work_description.split("。")[0] if "。" in work_description else work_description
+        intro_subtitle = first_sentence[:40].rstrip("。、") + "――その問いと意義"
+    elif logic_flow and len(logic_flow) > 10:
+        intro_subtitle = logic_flow[:40].rstrip("。、") + "――その核心"
+    else:
+        intro_subtitle = f"{book_title_ja}を読む――その問いと意義"
 
     intro_prompt = INTRO_PROMPT.format(
         book_title_ja=book_title_ja,
@@ -256,7 +256,9 @@ def write_book_guide(
         headings_list=headings_list,
         intro_subtitle=intro_subtitle,
     )
+    _t0 = time.time()
     intro_md = llm.invoke(intro_prompt).content.strip()
+    event_log.llm("web_researcher/guide_writer", "write_intro", model, time.time() - _t0)
 
     # ── 2. Sections (one per chunk) ────────────────────────────────────────────
     section_parts: list[str] = []
@@ -281,7 +283,9 @@ def write_book_guide(
             summary_text=chunk.summary_text[:3000],
             related_text=related,
         )
+        _t0 = time.time()
         section_md = llm.invoke(section_prompt).content.strip()
+        event_log.llm("web_researcher/guide_writer", f"write_section[{i+1}/{total}]", model, time.time() - _t0)
         section_parts.append(section_md)
 
     # ── 3. Practical checklist ─────────────────────────────────────────────────
@@ -297,11 +301,15 @@ def write_book_guide(
     checklist_prompt = CHECKLIST_PROMPT.format(
         book_title_ja=book_title_ja,
         author_ja=author_ja,
+        work_description=work_description[:300],
+        headings_list=headings_list,
         aporias_text=aporias_text,
         concepts_text=concepts_text,
         logic_flow=logic_flow[:800],
     )
+    _t0 = time.time()
     checklist_md = llm.invoke(checklist_prompt).content.strip()
+    event_log.llm("web_researcher/guide_writer", "write_checklist", model, time.time() - _t0)
 
     # ── 4. Assemble and write ──────────────────────────────────────────────────
     parts = [intro_md] + section_parts + [checklist_md]

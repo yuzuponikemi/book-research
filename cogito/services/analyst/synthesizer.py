@@ -9,9 +9,12 @@ from __future__ import annotations
 import json
 from typing import Literal
 
+import time
+
 from langchain_ollama import ChatOllama
 
 from cogito.utils.logger import create_step, extract_json
+from cogito.utils import event_log
 from cogito.schemas.concept_graph import ConceptGraphV1
 
 
@@ -111,7 +114,9 @@ def synthesize_concept_graph(
         work_description=work_description,
     )
 
+    _t0 = time.time()
     raw_response = llm.invoke(prompt).content
+    event_log.llm("analyst/synthesizer", "synthesize_concept_graph", model, time.time() - _t0)
 
     parsed: dict | None = None
     error: str | None = None

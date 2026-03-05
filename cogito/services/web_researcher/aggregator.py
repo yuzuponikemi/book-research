@@ -12,7 +12,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
+import time
+
 from langchain_ollama import ChatOllama
+
+from cogito.utils import event_log
 
 from cogito.utils.logger import create_step, extract_json
 from cogito.services.web_researcher.planner import Heading
@@ -106,7 +110,9 @@ def aggregate_headings(
             search_results_text=search_results_text,
         )
 
+        _t0 = time.time()
         raw_response = llm.invoke(prompt).content
+        event_log.llm("web_researcher/aggregator", f"summarize: {heading.title[:30]}", model, time.time() - _t0)
         parsed: dict | None = None
         error: str | None = None
         try:

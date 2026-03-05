@@ -17,6 +17,8 @@ Usage:
 import os
 import time
 
+from cogito.utils import event_log
+
 
 def search_tavily(queries: list[str], max_results: int = 5) -> list[dict]:
     """Search via Tavily API. Requires TAVILY_API_KEY environment variable.
@@ -37,17 +39,21 @@ def search_tavily(queries: list[str], max_results: int = 5) -> list[dict]:
     all_results = []
 
     for i, query in enumerate(queries):
+        t0 = time.time()
         try:
             response = client.search(query=query, max_results=max_results)
-            for r in response.get("results", []):
+            hits = response.get("results", [])
+            for r in hits:
                 all_results.append({
                     "query": query,
                     "title": r.get("title", ""),
                     "url": r.get("url", ""),
                     "body": r.get("content", ""),
                 })
+            event_log.api("web_researcher/web_search", "tavily", query, len(hits), time.time() - t0)
         except Exception as e:
             print(f"      [tavily] Query failed: '{query}': {e}")
+            event_log.error("web_researcher/web_search", f"tavily failed: {e}")
 
         if i < len(queries) - 1:
             time.sleep(0.5)
@@ -74,6 +80,7 @@ def search_duckduckgo(queries: list[str], max_results: int = 5) -> list[dict]:
 
     all_results = []
     for i, query in enumerate(queries):
+        t0 = time.time()
         try:
             with DDGS() as ddgs:
                 results = list(ddgs.text(query, max_results=max_results))
@@ -84,8 +91,10 @@ def search_duckduckgo(queries: list[str], max_results: int = 5) -> list[dict]:
                     "url": r.get("href", ""),
                     "body": r.get("body", ""),
                 })
+            event_log.api("web_researcher/web_search", "duckduckgo", query, len(results), time.time() - t0)
         except Exception as e:
             print(f"      [duckduckgo] Query failed: '{query}': {e}")
+            event_log.error("web_researcher/web_search", f"duckduckgo failed: {e}")
 
         if i < len(queries) - 1:
             time.sleep(1.5)
