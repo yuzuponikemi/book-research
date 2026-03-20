@@ -19,6 +19,7 @@ Flags:
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -210,6 +211,8 @@ def run(book_config: str, chat_jid: str, group_folder: str, fast: bool = True) -
         "--mode", "essence",
         "--skip-translate",
         "--skip-audio",
+        "--reader-model", "llama3.2:latest",
+        "--dramaturg-model", "qwen3.5:latest",  # qwen3-next は破損モデルのため非推奨
     ]
     if fast:
         cmd.append("--skip-research")
@@ -221,6 +224,14 @@ def run(book_config: str, chat_jid: str, group_folder: str, fast: bool = True) -
         chat_jid, group_folder
     )
 
+    # 環境変数設定（DockerコンテナからMacのOllamaへ接続、パッケージパス）
+    env = os.environ.copy()
+    env.setdefault("OLLAMA_HOST", "http://host.docker.internal:11434")
+    # パッケージが /workspace/group/.pypackages にインストールされている場合は追加
+    pypackages = "/workspace/group/.pypackages"
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{pypackages}:{existing}" if existing else pypackages
+
     # サブプロセス起動
     proc = subprocess.Popen(
         cmd,
@@ -229,6 +240,7 @@ def run(book_config: str, chat_jid: str, group_folder: str, fast: bool = True) -
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        env=env,
     )
 
     run_dir: Path | None = None
