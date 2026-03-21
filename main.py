@@ -361,6 +361,13 @@ NODE_META: dict[str, tuple] = {
             f"{sum(len(sc.get('dialogue',[])) for sc in s.get('scripts',[]))} lines"
         ),
     ),
+    "evaluate_scripts": (
+        "Evaluating",
+        None,
+        None,
+        None,
+        lambda s: f"{len(s.get('eval_scores',[]))} scripts scored, regen={'Yes' if s.get('needs_regen') else 'No'}",
+    ),
     "synthesize_audio": (
         "Audio Synthesis",
         "06_audio",
@@ -404,6 +411,7 @@ ALL_NODES_ORDERED = [
     "generate_reading_material",
     "plan",
     "write_scripts",
+    "evaluate_scripts",
     "synthesize_audio",
     "check_translate",
     "translate",
@@ -426,6 +434,8 @@ def _build_active_sequence(state: dict) -> list[str]:
         seq.append("generate_reading_material")
     seq.append("plan")
     seq.append("write_scripts")
+    if not state.get("skip_eval", False):
+        seq.append("evaluate_scripts")
     if not skip_audio:
         seq.append("synthesize_audio")
     seq.append("check_translate")
@@ -471,6 +481,13 @@ def main():
         description="Project Cogito: Philosophical text -> podcast scripts"
     )
     parser.add_argument(
+        "--add-book",
+        nargs=3,
+        metavar=("TITLE", "AUTHOR", "SOURCE"),
+        help="新しい書籍設定を生成する: --add-book 'タイトル' '著者名' 'URL/ファイルパス'"
+    )
+    parser.add_argument("--language", default="ja", help="書籍の言語 (default: ja)")
+    parser.add_argument(
         "--book", default="descartes_discourse",
         help="Book config name from config/books/ (default: descartes_discourse)",
     )
@@ -500,6 +517,8 @@ def main():
     parser.add_argument("--skip-audio", action="store_true", help="Skip VOICEVOX audio synthesis stage")
     parser.add_argument("--skip-lateral", action="store_true", help="Skip lateral vector drift stage")
     parser.add_argument("--deep-analysis", action="store_true", help="Enable agentic deep analysis with reflection loop")
+    parser.add_argument("--skip-eval", action="store_true", help="スクリプト評価をスキップ")
+    parser.add_argument("--eval-threshold", type=float, default=3.0, help="再生成しきい値 (1-5, default: 3.0)")
     parser.add_argument("--trace", action="store_true", help="Enable Arize Phoenix tracing UI")
     parser.add_argument(
         "--resume", metavar="RUN_ID", default=None,
@@ -510,6 +529,14 @@ def main():
         help="Re-execute from this node onward (requires --resume)",
     )
     args = parser.parse_args()
+
+    if args.add_book:
+        from src.book_builder import add_book
+        title, author, source = args.add_book
+        output_path = add_book(title, author, source, getattr(args, 'language', 'ja'))
+        print(f"✅ 書籍設定を作成しました: {output_path}")
+        print(f"   実行: python3 main.py --book {output_path.stem}")
+        return
 
     if args.mode == "topic" and not args.topic:
         parser.error("--topic is required when using topic mode")
@@ -573,6 +600,11 @@ def main():
         "skip_audio": args.skip_audio,
         "skip_translate": args.skip_translate,
         "deep_analysis": args.deep_analysis,
+        "skip_eval": args.skip_eval,
+        "eval_threshold": args.eval_threshold,
+        "eval_scores": [],
+        "needs_regen": False,
+        "regen_count": 0,
         "run_dir": str(run_dir),
         "run_id": run_id,
     }

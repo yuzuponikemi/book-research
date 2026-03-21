@@ -285,6 +285,27 @@ prompt_fragments:
     the role of God in validating clear and distinct ideas.
 ```
 
+#### PDF / EPUB ソース
+
+ローカルの PDF または EPUB ファイルを入力として使用できる。
+
+```yaml
+# PDF の場合
+source:
+  type: pdf
+  path: data/my_book.pdf    # relative to book-research/ or absolute path
+  cache_filename: my_book_cache.txt
+
+# or for EPUB:
+source:
+  type: epub
+  path: data/my_book.epub
+```
+
+PDF サポートには `pymupdf` が必要: `pip install pymupdf`
+
+---
+
 必須フィールド: `book.title`, `book.author`, `source.type`, `chunking.strategy`
 
 テンプレート変数: 検索クエリとプロンプト断片で `{author}`, `{title}`, `{author_ja}`, `{title_ja}`, `{year}` が使用可能。
