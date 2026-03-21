@@ -23,8 +23,16 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime
 from pathlib import Path
+
+try:
+    import yaml as _yaml  # PyYAML（オプション）
+    _YAML_AVAILABLE = True
+except ImportError:
+    _YAML_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # 定数
@@ -94,6 +102,58 @@ def send_ipc(text: str, chat_jid: str, group_folder: str) -> None:
     IPC_MESSAGES_DIR.mkdir(parents=True, exist_ok=True)
     filename.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     time.sleep(0.3)  # ファイルウォッチャーが順序通り処理できるよう間隔を空ける
+
+
+# ---------------------------------------------------------------------------
+# Ollama モデルサイズチェック
+# ---------------------------------------------------------------------------
+
+def check_model_size(model_name: str, min_size_gb: float,
+                     chat_jid: str, group_folder: str) -> bool:
+    """Ollama API でモデルサイズを確認し、小さすぎる場合は警告してFalseを返す。"""
+    ollama_host = os.environ.get("OLLAMA_HOST", "http://host.docker.internal:11434")
+    url = f"{ollama_host}/api/tags"
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        send_ipc(
+            f"⚠️ Ollama API に接続できません ({url}): {e}\n"
+            f"モデルチェックをスキップします。",
+            chat_jid, group_folder
+        )
+        return True  # 接続不可の場合はチェックをスキップして続行
+
+    models = data.get("models", [])
+    # モデル名（タグなし・タグあり両方で照合）
+    found = None
+    for m in models:
+        name = m.get("name", "")
+        if name == model_name or name.split(":")[0] == model_name.split(":")[0]:
+            found = m
+            break
+
+    if found is None:
+        send_ipc(
+            f"⚠️ モデル '{model_name}' が Ollama に見つかりません。\n"
+            f"利用可能: {', '.join(m.get('name','') for m in models[:5])}",
+            chat_jid, group_folder
+        )
+        return False
+
+    size_bytes = found.get("size", 0)
+    size_gb = size_bytes / 1e9
+    if size_gb < min_size_gb:
+        send_ipc(
+            f"⚠️ モデル '{model_name}' のサイズが小さすぎます "
+            f"({size_gb:.1f}GB < {min_size_gb}GB)。\n"
+            f"空スクリプトになる可能性があります。",
+            chat_jid, group_folder
+        )
+        return False
+
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +264,42 @@ def run(book_config: str, chat_jid: str, group_folder: str, fast: bool = True) -
     book_label = BOOK_LABELS.get(book_config, book_config)
     mode_label = "fast (~2-5分、研究スキップ)" if fast else "full (~5-15分、リサーチあり)"
 
+    # ---------------------------------------------------------------------------
+    # モデル設定の読み込み（config/ollama_models.yaml → 環境変数 → デフォルト値）
+    # ---------------------------------------------------------------------------
+    config_path = BOOK_RESEARCH_DIR / "config" / "ollama_models.yaml"
+    reader_model_default = "llama3.2:latest"
+    dramaturg_model_default = "qwen3.5:latest"
+    reader_min_size_gb = 1.0
+    dramaturg_min_size_gb = 4.0
+
+    if config_path.exists() and _YAML_AVAILABLE:
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                cfg = _yaml.safe_load(f)
+            if isinstance(cfg, dict):
+                if "reader" in cfg and isinstance(cfg["reader"], dict):
+                    reader_model_default = cfg["reader"].get("model", reader_model_default)
+                    reader_min_size_gb = float(cfg["reader"].get("min_size_gb", reader_min_size_gb))
+                if "dramaturg" in cfg and isinstance(cfg["dramaturg"], dict):
+                    dramaturg_model_default = cfg["dramaturg"].get("model", dramaturg_model_default)
+                    dramaturg_min_size_gb = float(cfg["dramaturg"].get("min_size_gb", dramaturg_min_size_gb))
+        except Exception:
+            pass  # 設定ファイルのパースエラーはデフォルト値にフォールバック
+
+    reader_model = os.environ.get("COGITO_READER_MODEL", reader_model_default)
+    dramaturg_model = os.environ.get("COGITO_DRAMATURG_MODEL", dramaturg_model_default)
+
+    # ---------------------------------------------------------------------------
+    # モデルサイズチェック
+    # ---------------------------------------------------------------------------
+    if not check_model_size(dramaturg_model, dramaturg_min_size_gb, chat_jid, group_folder):
+        send_ipc(
+            f"⚠️ dramaturg model '{dramaturg_model}' が小さすぎます。"
+            f"空スクリプトになる可能性があります。続行します。",
+            chat_jid, group_folder
+        )
+
     # コマンド構築
     cmd = [
         sys.executable, "main.py",
@@ -211,8 +307,8 @@ def run(book_config: str, chat_jid: str, group_folder: str, fast: bool = True) -
         "--mode", "essence",
         "--skip-translate",
         "--skip-audio",
-        "--reader-model", "llama3.2:latest",
-        "--dramaturg-model", "qwen3.5:latest",  # qwen3-next は破損モデルのため非推奨
+        "--reader-model", reader_model,
+        "--dramaturg-model", dramaturg_model,
     ]
     if fast:
         cmd.append("--skip-research")
@@ -245,12 +341,24 @@ def run(book_config: str, chat_jid: str, group_folder: str, fast: bool = True) -
 
     run_dir: Path | None = None
     last_progress_time = time.time()
+    last_heartbeat_time = time.time()
+    start_time = time.time()
 
     assert proc.stdout is not None
     for raw_line in proc.stdout:
         line = raw_line.rstrip()
+        now = time.time()
+
+        # ハートビート: 2分以上進捗がなければ通知
+        if now - last_heartbeat_time > 120:
+            elapsed_min = int((now - start_time) / 60)
+            send_ipc(f"⏳ 処理中... ({elapsed_min}分経過)", chat_jid, group_folder)
+            last_heartbeat_time = now
+
         if not line:
             continue
+
+        progress_sent = False
 
         # 進捗行をパース: [N/M] Label: summary (Xs)
         if line.startswith("[") and "/" in line and "]" in line:
@@ -266,10 +374,10 @@ def run(book_config: str, chat_jid: str, group_folder: str, fast: bool = True) -
                     if summary.endswith(")") and "(" in summary:
                         summary = summary[:summary.rfind("(")].strip()
                     msg = f"⚙️ [{progress_part}] {stage_label}\n{summary[:120]}"
-                    now = time.time()
                     if now - last_progress_time > 0.5:  # 短時間の重複送信を防止
                         send_ipc(msg, chat_jid, group_folder)
                         last_progress_time = now
+                        progress_sent = True
             except Exception:
                 pass
 
@@ -285,6 +393,14 @@ def run(book_config: str, chat_jid: str, group_folder: str, fast: bool = True) -
                     run_dir = BOOK_RESEARCH_DIR / path_str
             except Exception:
                 pass
+
+        if progress_sent:
+            last_heartbeat_time = now  # 進捗送信時にハートビートタイマーをリセット
+
+    # 長時間経過した場合の通知（stdoutが閉じた後）
+    total_elapsed = time.time() - start_time
+    if total_elapsed > 300 and time.time() - last_progress_time > 300:
+        send_ipc("⏳ Ollama推論中（時間がかかっています）", chat_jid, group_folder)
 
     proc.wait()
 

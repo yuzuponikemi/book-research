@@ -1,0 +1,16 @@
+# Ollamaモデル設定
+# Macのollamaで利用可能なモデルを設定する
+# 確認: curl http://host.docker.internal:11434/api/tags
+
+reader:
+  model: llama3.2:latest       # テキスト分析・概念抽出用
+  min_size_gb: 1.0             # この容量未満のモデルは警告を出す
+
+dramaturg:
+  model: qwen3.5:latest        # 日本語対話スクリプト生成用（要8GB+ VRAM）
+  min_size_gb: 4.0             # 小いモデルだと空スクリプトになるため警告
+
+translator:
+  model: translategemma:12b    # 英→日翻訳用
+
+ollama_host: http://host.docker.internal:11434  # Docker→Mac接続用
