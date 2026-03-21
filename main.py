@@ -471,6 +471,13 @@ def main():
         description="Project Cogito: Philosophical text -> podcast scripts"
     )
     parser.add_argument(
+        "--add-book",
+        nargs=3,
+        metavar=("TITLE", "AUTHOR", "SOURCE"),
+        help="新しい書籍設定を生成する: --add-book 'タイトル' '著者名' 'URL/ファイルパス'"
+    )
+    parser.add_argument("--language", default="ja", help="書籍の言語 (default: ja)")
+    parser.add_argument(
         "--book", default="descartes_discourse",
         help="Book config name from config/books/ (default: descartes_discourse)",
     )
@@ -510,6 +517,14 @@ def main():
         help="Re-execute from this node onward (requires --resume)",
     )
     args = parser.parse_args()
+
+    if args.add_book:
+        from src.book_builder import add_book
+        title, author, source = args.add_book
+        output_path = add_book(title, author, source, getattr(args, 'language', 'ja'))
+        print(f"✅ 書籍設定を作成しました: {output_path}")
+        print(f"   実行: python3 main.py --book {output_path.stem}")
+        return
 
     if args.mode == "topic" and not args.topic:
         parser.error("--topic is required when using topic mode")

@@ -36,6 +36,57 @@ def load_local_file(filepath: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def load_pdf(filepath: str) -> str:
+    """Load text from a PDF file using PyMuPDF."""
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        raise ImportError("PyMuPDF is required for PDF support: pip install pymupdf")
+
+    path = Path(filepath)
+    if not path.is_absolute():
+        path = DATA_DIR / path
+
+    doc = fitz.open(str(path))
+    pages = []
+    for page_num, page in enumerate(doc, 1):
+        text = page.get_text()
+        if text.strip():
+            pages.append(f"[Page {page_num}]\n{text}")
+    doc.close()
+    return "\n\n".join(pages)
+
+
+def load_epub(filepath: str) -> str:
+    """Load text from an EPUB file."""
+    try:
+        import zipfile
+        from xml.etree import ElementTree as ET
+        import re as _re
+    except ImportError:
+        raise ImportError("Standard library required for EPUB support")
+
+    path = Path(filepath)
+    if not path.is_absolute():
+        path = DATA_DIR / path
+
+    texts = []
+    with zipfile.ZipFile(str(path)) as z:
+        # Find all HTML/XHTML content files
+        for name in sorted(z.namelist()):
+            if name.endswith(('.html', '.xhtml', '.htm')):
+                try:
+                    content = z.read(name).decode('utf-8', errors='ignore')
+                    # Strip HTML tags
+                    text = _re.sub(r'<[^>]+>', ' ', content)
+                    text = _re.sub(r'\s+', ' ', text).strip()
+                    if len(text) > 100:
+                        texts.append(text)
+                except Exception:
+                    pass
+    return "\n\n".join(texts)
+
+
 def acquire_text(source_config: dict) -> str:
     """Acquire text based on source configuration.
 
@@ -56,6 +107,10 @@ def acquire_text(source_config: dict) -> str:
         arxiv_id = source_config["arxiv_id"]
         cache = cache_filename or f"arxiv_{arxiv_id.replace('/', '_')}.md"
         return fetch_arxiv_fulltext(arxiv_id, cache)
+    elif source_type == "pdf":
+        return load_pdf(source_config.get("path", cache_filename))
+    elif source_type == "epub":
+        return load_epub(source_config.get("path", cache_filename))
     else:
         raise ValueError(f"Unknown source type: {source_type}")
 
