@@ -15,6 +15,7 @@ from src.director.planner import plan
 from src.dramaturg.scriptwriter import write_scripts
 from src.audio.synthesizer import synthesize_audio
 from src.translator import translate_node
+from src.evaluator.evaluator import evaluate_scripts
 
 
 def should_research(state: CogitoState) -> str:
@@ -29,6 +30,26 @@ def should_lateral(state: CogitoState) -> str:
     if state.get("skip_lateral", False):
         return "generate_reading_material"
     return "lateral_drift"
+
+
+def should_eval(state: CogitoState) -> str:
+    """Decide whether to run the evaluation node or skip directly to audio routing."""
+    if state.get("skip_eval", False):
+        # Skip eval — apply audio skip logic directly
+        if state.get("skip_audio", False):
+            return "check_translate"
+        return "synthesize_audio"
+    return "evaluate_scripts"
+
+
+def should_regen(state: CogitoState) -> str:
+    """Decide whether to regenerate scripts based on evaluation."""
+    if state.get("needs_regen", False) and state.get("regen_count", 0) < 2:
+        return "write_scripts"  # regenerate (max 2 attempts)
+    # Done evaluating — apply audio skip logic
+    if state.get("skip_audio", False):
+        return "check_translate"
+    return "synthesize_audio"
 
 
 def should_audio(state: CogitoState) -> str:
@@ -58,8 +79,9 @@ def build_graph(checkpointer=None):
           → (if not skip_research) → research → critique → enrich → generate_reading_material → plan
           → (if skip_research) → plan
         plan → write_scripts
-          → (if not skip_audio) → synthesize_audio → check_translate
-          → (if skip_audio) → check_translate
+          → (if not skip_eval) → evaluate_scripts → (regen or continue)
+          → (if skip_eval) → synthesize_audio or check_translate
+        synthesize_audio → check_translate
         check_translate
           → (if not skip_translate) → translate → END
           → (if skip_translate) → END
@@ -83,6 +105,7 @@ def build_graph(checkpointer=None):
 
     # --- Layer 4: Dramaturg ---
     graph.add_node("write_scripts", write_scripts)
+    graph.add_node("evaluate_scripts", evaluate_scripts)
     graph.add_node("synthesize_audio", synthesize_audio)
 
     # --- Layer 5: Post-processing ---
@@ -124,11 +147,23 @@ def build_graph(checkpointer=None):
     # Planning to Scripting
     graph.add_edge("plan", "write_scripts")
 
-    # Conditional branching for Audio
+    # Conditional branching for Eval (skip_eval → direct to audio or translate)
     graph.add_conditional_edges(
         "write_scripts",
-        should_audio,
+        should_eval,
         {
+            "evaluate_scripts": "evaluate_scripts",
+            "synthesize_audio": "synthesize_audio",
+            "check_translate": "check_translate",
+        },
+    )
+
+    # Conditional branching from eval: regen or continue to audio (or skip audio)
+    graph.add_conditional_edges(
+        "evaluate_scripts",
+        should_regen,
+        {
+            "write_scripts": "write_scripts",
             "synthesize_audio": "synthesize_audio",
             "check_translate": "check_translate",
         },
