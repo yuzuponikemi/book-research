@@ -144,6 +144,7 @@ class CogitoState(TypedDict):
     skip_translate: bool
     skip_lateral: bool
     deep_analysis: bool
+    skip_eval: bool
 
     # Data Artifacts
     raw_chunks: list[str]
@@ -157,6 +158,12 @@ class CogitoState(TypedDict):
     syllabus: dict
     scripts: list[dict]
     audio_metadata: list[dict]
+
+    # Evaluation
+    eval_scores: list[dict]
+    needs_regen: bool
+    eval_threshold: float
+    regen_count: int
 
     # Logging
     thinking_log: list[dict]
