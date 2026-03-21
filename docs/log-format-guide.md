@@ -11,13 +11,13 @@ JSON ファイルのルートは `ThinkingLog` オブジェクト。
 
 ```json
 {
-  "run_id": "run_20260212_100013",
-  "started_at": "2026-02-12T10:00:13.456789",
+  "run_id": "run_20260301_120000",
+  "started_at": "2026-03-01T12:00:00.456789",
   "book_title": "Discourse on the Method",
   "mode": "essence",
   "steps": [
-    { "timestamp": "...", "layer": "reader", "node": "analyst", ... },
-    { "timestamp": "...", "layer": "reader", "node": "analyst", ... },
+    { "timestamp": "...", "layer": "analyst", "node": "extractor", ... },
+    { "timestamp": "...", "layer": "analyst", "node": "synthesizer", ... },
     ...
   ],
   "final_concept_graph": { ... },
@@ -47,10 +47,19 @@ JSON ファイルのルートは `ThinkingLog` オブジェクト。
 
 | フィールド | 例 | 説明 |
 |-----------|-----|------|
-| `timestamp` | `"2026-02-12T10:01:23.456"` | 実行時刻 |
-| `layer` | `"reader"`, `"director"`, `"dramaturg"` | 担当レイヤー |
-| `node` | `"analyst"`, `"synthesizer"`, `"scriptwriter"` | 担当モジュール |
-| `action` | `"analyze_chunk:part_1"`, `"write_script:episode_1"` | 実行アクション名 |
+| `timestamp` | `"2026-03-01T12:01:23.456"` | 実行時刻 |
+| `layer` | `"analyst"`, `"producer"`, `"web_researcher"` | 担当サービス |
+| `node` | `"extractor"`, `"synthesizer"`, `"planner"`, `"podcast"` | 担当モジュール |
+| `action` | `"analyze_chunk:PART IV"`, `"write_script:episode_1"` | 実行アクション名 |
+
+**`layer` の値一覧:**
+
+| layer 値 | 対応サービス | 説明 |
+|----------|------------|------|
+| `"analyst"` | `cogito/services/analyst/` | チャンク分析・グラフ合成 |
+| `"web_researcher"` | `cogito/services/web_researcher/` | Web 検索・要約・グラフ合成 |
+| `"producer"` | `cogito/services/producer/` | シラバス設計・台本生成 |
+| `"translator"` | `cogito/services/translator/` | 英日翻訳 |
 
 ### 2. 入力と推論
 
@@ -58,8 +67,8 @@ LLM に何を渡し、システムがどう判断したか。
 
 | フィールド | 説明 |
 |-----------|------|
-| `input_summary` | 人間が読みやすい入力データの要約（例: `"Chunk 'part_1': 15000 chars"`） |
-| `reasoning` | 処理完了後のシステムの要約コメント（例: `"Extracted 12 concepts from part_1"`） |
+| `input_summary` | 人間が読みやすい入力データの要約（例: `"Chunk 'PART IV': 15000 chars"`） |
+| `reasoning` | 処理完了後のシステムの要約コメント（例: `"Extracted 12 concepts from PART IV"`） |
 
 ### 3. LLM との対話
 
@@ -91,9 +100,9 @@ LLM に何を渡し、システムがどう判断したか。
 
 ### シナリオB: 「概念抽出の精度が低い」
 
-1. `"node": "analyst"` のステップを検索
+1. `"node": "extractor"` のステップを検索
 2. `llm_raw_response` でモデルの回答を確認
-3. 説明が浅ければ、`src/reader/analyst.py` 内の `ANALYSIS_PROMPT` を修正する際の参考にする
+3. 説明が浅ければ、`cogito/services/analyst/extractor.py` 内の `ANALYSIS_PROMPT` を修正する際の参考にする
 
 ### シナリオC: エラー原因の特定
 

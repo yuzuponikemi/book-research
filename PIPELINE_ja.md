@@ -1,4 +1,6 @@
-# Project Cogito - パイプラインガイド
+# Project Cogito — パイプラインガイド
+
+> English version: [PIPELINE.md](PIPELINE.md)
 
 ## クイックスタート
 
@@ -6,295 +8,298 @@
 # 仮想環境を有効化
 source .venv/bin/activate
 
-# デフォルト設定で実行（essenceモード、descartes_defaultペルソナ）
-python3 main.py
+# Ollama 起動（Apple Silicon）
+OLLAMA_KEEP_ALIVE=120m OLLAMA_NUM_PARALLEL=1 ollama serve
 
-# オプションを指定して実行
-python3 main.py --mode curriculum --persona socratic
-python3 main.py --mode topic --topic "cogito ergo sum" --persona debate
+# 実行: 本文テキスト → ポッドキャスト台本
+python -m cogito.orchestrator --book descartes_discourse --mode essence
 
-# 別のOllamaモデルを指定
-python3 main.py --reader-model command-r --dramaturg-model qwen3-next
+# 実行: Web検索 → ポッドキャスト台本（本文不要）
+python -m cogito.orchestrator --source web --subject "ニーチェ ツァラトゥストラはこう言った" --mode curriculum
 
-# 翻訳モデルを指定（デフォルト: translategemma:12b）
-python3 main.py --translator-model translategemma:12b
-
-# 翻訳ステップをスキップ
-python3 main.py --skip-translate
+# 中断したランを再開
+python -m cogito.orchestrator --resume run_20260301_120000
 ```
 
-### CLIオプション
+---
+
+## アーキテクチャ概要
+
+2つの入力ルートが Producer で合流するパイプラインです。
+
+```
+Route A（本文テキストあり）:
+  Book Config YAML → [Ingestor]      → ChunksV1
+                   → [Analyst]       → ConceptGraphV1 ─┐
+                                                        ├→ [Producer] → Syllabus + Scripts
+Route B（Web検索）:                                     │
+  テーマ / 著者    → [WebResearcher] → ConceptGraphV1 ─┘
+
+後処理（両ルート共通）:
+  Scripts → [Audio]      → MP3 ファイル（VOICEVOX）
+  出力    → [Translator] → *_ja.md ファイル
+```
+
+全体のオーケストレーションは **LangGraph** (`cogito/orchestrator/graph.py`) が担い、SQLite チェックポイントによる途中再開が可能です。
+各サービスは `cogito/services/` 内の独立モジュールです。
+
+---
+
+## CLIオプション
 
 | フラグ | デフォルト | 説明 |
 |---|---|---|
-| `--mode` | `essence` | `essence`（1話、核心のアイデア）、`curriculum`（4-6話の連続講義）、`topic`（特定テーマに集中） |
+| `--book BOOK` | — | Book config 名（`--subject` と排他） |
+| `--subject TEXT` | — | 自由形式のテーマ（Route B、book config なし） |
+| `--from-graph PATH` | — | 分析をスキップ、既存の ConceptGraphV1 JSON から開始 |
+| `--resume RUN_ID` | — | 中断したランをチェックポイントから再開 |
+| `--source` | `book` | `book`（Route A）/ `web`（Route B） |
+| `--mode` | `essence` | `essence`（1話）/ `curriculum`（3-6話）/ `topic`（特定テーマ） |
+| `--topic TEXT` | — | `topic` モード時に必須 |
 | `--persona` | `descartes_default` | `config/personas.yaml` のペルソナプリセット名 |
-| `--topic` | - | `topic` モードで必須 |
-| `--reader-model` | `llama3` | 分析・計画用のOllamaモデル（JSON出力能力が必要） |
-| `--dramaturg-model` | `qwen3-next` | 日本語対話生成用のOllamaモデル |
-| `--translator-model` | `translategemma:12b` | 中間出力の日本語翻訳用モデル |
-| `--skip-translate` | - | 翻訳ステップをスキップ |
-| `--skip-research` | - | 研究・批評・統合ステージをスキップ |
-| `--skip-audio` | - | VOICEVOX 音声合成をスキップ |
-| `--trace` | - | Arize Phoenix のローカル UI を起動し、全 LLM 呼び出しをトレース |
-| `--resume` | - | 前回実行のチェックポイントから再開（run ID を指定） |
-| `--from-node` | - | 指定ノード以降を再実行（`--resume` 必須） |
+| `--reader-model` | `llama3` | 分析・計画用 Ollama モデル |
+| `--dramaturg-model` | `qwen3-next` | 日本語台本生成用 Ollama モデル |
+| `--translator-model` | `translategemma:12b` | EN→JA 翻訳用 Ollama モデル |
+| `--skip-research` | — | Web 検索ステージをスキップ（Route A のみ） |
+| `--skip-audio` | — | VOICEVOX 音声合成をスキップ |
+| `--skip-translate` | — | 日本語翻訳をスキップ |
 
 ---
 
-## パイプラインの全体像
+## パイプラインの各ステージ
 
-Project Cogitoは、哲学的テキストを分析し、ポッドキャスト台本に変換するパイプラインです。
-3つのレイヤー（Reader・Director・Dramaturg）が順に処理を行います。
+### ステージ 1: テキスト取得（Route A のみ）
 
-```
-テキスト取得 → 概念抽出 → 統合 → カリキュラム設計 → 台本生成 → 日本語翻訳
-  (Stage 1)   (Stage 2)  (Stage 3)  (Stage 4)       (Stage 5)    (Stage 6)
-   Reader層     Reader層   Reader層   Director層    Dramaturg層   Translator
-```
+`cogito/services/ingestor/` が Book Config の `source` 設定に従いテキストを取得し、チャンクに分割します。
 
-各ステージの出力は、人間が読める `.md` ファイルと機械可読の `.json` ファイルとして保存されます。
+| source.type | 動作 |
+|---|---|
+| `gutenberg` | Project Gutenberg からダウンロード（キャッシュあり） |
+| `local_file` | `data/` 以下のローカルファイルを読み込み |
+| `url` | 任意の URL から取得 |
+| `arxiv` | arXiv 論文を ar5iv HTML 経由でフルテキスト取得 |
 
-```
-data/run_YYYYMMDD_HHMMSS/
-  01_chunks.md              <- テキストチャンク
-  01_chunks.json
-  02_chunk_analyses.md      <- チャンクごとの概念抽出（英語）
-  02_chunk_analyses_ja.md   <- チャンクごとの概念抽出（日本語）
-  02_chunk_analyses.json
-  03_concept_graph.md       <- 統合コンセプトグラフ（英語）
-  03_concept_graph_ja.md    <- 統合コンセプトグラフ（日本語）
-  03_concept_graph.json
-  04_syllabus.md            <- エピソード計画（英語）
-  04_syllabus_ja.md         <- エピソード計画（日本語）
-  04_syllabus.json
-  05_scripts.md             <- 最終対話台本（日本語）
-  05_scripts.json
+出力: `01_chunks.json`（`ChunksV1` スキーマ）
 
-logs/run_YYYYMMDD_HHMMSS.json  <- 思考ログ（全LLMプロンプト・レスポンス）
-```
+**LLM 呼び出し: なし**（決定論的なテキスト処理）
 
 ---
 
-## 各ステージの詳細
+### ステージ 2a: 概念抽出（Route A）
 
-### ステージ1: テキスト取得 (`01_chunks`)
+`cogito/services/analyst/extractor.py` が各チャンクを Reader モデルで分析し、以下を抽出します。
 
-**処理内容:** Project Gutenbergからデカルトの『方法序説』原文（英訳）をダウンロードし、
-ヘッダー・フッターを除去した上で、PART I〜PART VIの6つのセマンティックチャンクに分割します。
+- **概念（concepts）**: 名前・定義・原文引用（チャンクごとに3-8個）
+- **アポリア（aporias）**: 未解決の問い・矛盾
+- **関係（relations）**: 概念間の依存・矛盾・発展
+- **論証構造（argument_structures）**
+- **修辞戦略（rhetorical_strategies）**
 
-**確認ポイント:**
-- 全6パートが正しく分割されているか
-- 各チャンクのサイズは適切か（PART I: 約15,000文字、PART V: 約32,000文字）
-- `01_chunks.md` を開いて各チャンクのプレビューを確認
+続いて `analyst/synthesizer.py` が全チャンクの分析を統合し、`ConceptGraphV1` を生成します（重複概念の統合、チャンク横断の関係構築）。
 
-**LLM呼び出し:** なし（決定論的なテキスト処理のみ）
+出力: `02_chunk_analyses.json` → `03_concept_graph.json`
 
-### ステージ2: 概念抽出 (`02_chunk_analyses`)
+**確認ポイント（`03_concept_graph.json`）:**
+- `core_frustration` は汎用的な要約ではなく真の知的緊張を表しているか
+- `logic_flow` はテキスト全体の一貫した物語を語っているか
+- チャンク間で重複する概念が正しく統合されているか
 
-**処理内容:** 各チャンクをReaderモデル（デフォルト: llama3）に送り、解釈学的分析プロンプトで
-概念（concepts）、アポリア（未解決の緊張）、概念間の関係、論理の流れを抽出します。
+---
 
-**確認ポイント（`02_chunk_analyses_ja.md`）:**
-- 各チャンクに概念が抽出されているか（チャンクごとに5-10個が期待値）
-- 抽出された概念は「要約」ではなく「哲学的概念」か
-- PART IVに `cogito_ergo_sum`（我思う、故に我あり）や `methodical_doubt`（方法的懐疑）が含まれるか
-- 引用は原文からの正確なものか（ハルシネーションでないか）
-- 関係性は妥当か（例: `methodical_doubt` → `cogito_ergo_sum`）
+### ステージ 2b: Web リサーチ（Route B）
 
-**よくある問題:**
-- あるチャンクの概念数が0 → JSON解析の失敗。思考ログの `llm_raw_response` を確認
-- 概念が浅い → モデルが小さすぎる。`--reader-model command-r` を試す
+`cogito/services/web_researcher/` が4ステップで ConceptGraphV1 を生成します。
 
-### ステージ3: 統合 (`03_concept_graph`)
+```
+Planner    → list[Heading]           見出しを決定（設定 or LLM 推定）
+Searcher   → dict[id → results]      各見出しでクエリ生成 → Web 検索
+Aggregator → list[SynthesizedChunk]  検索結果を LLM で段落要約
+Synthesizer→ ConceptGraphV1          概念グラフ生成
+```
 
-**処理内容:** 6つのチャンク分析を1つの統合コンセプトグラフにマージします。
-チャンク間で重複する概念を統合し、チャンク横断の関係を構築し、
-テキスト全体を貫く `core_frustration`（核心的なフラストレーション）を特定します。
+Web 検索エンジン:
+- **Tavily**（`TAVILY_API_KEY` 設定時、高品質）
+- **DuckDuckGo**（フォールバック、API キー不要、`pip install ddgs`）
 
-**確認ポイント（`03_concept_graph_ja.md`）:**
-- チャンク間の重複概念が統合されているか（例: `methodical_doubt` はParts I, II, IV, VIに
-  出現するが、統合グラフでは1つにまとまるべき）
-- `core_frustration` は汎用的な要約ではなく、真の知的緊張を表しているか
-- `logic_flow` はPART IからPART VIまでの一貫した物語を語っているか
-- チャンク横断の関係が存在するか（例: Part Iの懐疑 → Part IVのコギト）
+出力: `03_concept_graph.json`（Route A と同一スキーマ）
 
-**デカルト『方法序説』で期待される主要概念:**
-- 方法的懐疑（methodical doubt）
-- 我思う、故に我あり（cogito ergo sum）
-- 明晰判明の規則（clear and distinct perception）
-- 心身二元論（mind-body dualism）
-- 神の存在証明（proof of God's existence）
+---
 
-### ステージ4: カリキュラム設計 (`04_syllabus`)
+### ステージ 3: 制作（Producer）
 
-**処理内容:** モードに基づいてエピソード計画を生成します。
+`cogito/services/producer/` が2ステップで台本を生成します。
+
+**Planner**: `ConceptGraphV1` → `SyllabusV1`
 
 | モード | エピソード数 | 説明 |
 |---|---|---|
 | `essence` | 1話 | 核心的な緊張を捉える |
-| `curriculum` | 4-6話 | アイデアの論理的進行に沿って展開 |
-| `topic` | 1-2話 | 特定のトピックに集中 |
+| `curriculum` | 3-6話 | アイデアの論理的進行に沿って展開 |
+| `topic` | 1-2話 | `--topic` で指定したテーマに集中 |
 
-**確認ポイント（`04_syllabus_ja.md`）:**
-- `cognitive_bridge`（認知的ブリッジ）が17世紀の哲学と現代生活を接続しているか
-- `concept_ids` と `aporia_ids` がコンセプトグラフの実際のIDを参照しているか
-- `cliffhanger` が次のエピソードを聴きたくなる問いかけになっているか
-- エピソード間で概念の依存関係が尊重されているか
+**Podcast**: `SyllabusV1` → `list[ScriptV1]`
 
-**注意:** Plannerの出力は英語で生成されます（command-rが日本語を正しく生成できないため）。
-日本語版は翻訳ステージ（Stage 6）で生成されます。
+各エピソードは3幕構成（50-65発言を目標）:
+1. **導入** — 現代の具体例から哲学的問いを引き出す
+2. **掘り下げ** — 原著の概念を丁寧に展開し、引用を織り込む
+3. **統合と余韻** — 議論をまとめ、次エピソードへの期待を高める
 
-### ステージ5: 台本生成 (`05_scripts`)
+出力: `04_syllabus.json`、`05_scripts.json`
 
-**処理内容:** 選択されたペルソナプリセットとDramaturgモデル（デフォルト: qwen3-next）を使い、
-日本語の対話台本を生成します。各エピソードは3幕構成で、50-65発言を目標とします。
+---
 
-**3幕構成:**
-1. **第1幕: 導入と問題提起（約3分）** - 現代の具体例から哲学的問いを引き出す
-2. **第2幕: 哲学的掘り下げ（約5分）** - 原著の概念を丁寧に掘り下げ、引用を織り込む
-3. **第3幕: 統合と余韻（約2分）** - 議論をまとめ、リスナーに問いを残す
+### ステージ 4: 音声合成（Audio）
 
-**確認ポイント（`05_scripts.md`）:**
-- 対話は自然な日本語か（翻訳調になっていないか）
-- 二人のキャラクターの声やトーンが区別できるか
-- デカルトの原文引用が自然に織り込まれているか
-- `opening_bridge` が文脈を設定し、`closing_hook` が期待を高めているか
-- 第1話が『方法序説』の紹介から始まっているか（「前回」への言及がないか）
-- この対話が『方法序説』の解説であることが聴き手に明確に伝わるか
+`cogito/services/audio/` が VOICEVOX Engine（localhost:50021）を使って各エピソードの MP3 を生成します。
 
-**ペルソナの違い:** `--persona` の値によって対話スタイルが大きく変わります:
-- `descartes_default`: 現代の懐疑論者 vs. デカルトの亡霊
-- `socratic`: 哲学初心者の学生 vs. ソクラテス的メンター
-- `debate`: 情熱的な擁護者 vs. 厳格な批判者
+- ペルソナの `voice` マッピング（`config/personas.yaml`）でスピーカー ID を解決
+- 同一スピーカー間: 600ms 無音、話者交代: 800ms 無音、セクション区切り: 1800ms 無音
+- ビットレート: 192kbps MP3
 
-### ステージ6: 日本語翻訳
+VOICEVOX が起動していない場合はスキップされます（エラーにはなりません）。
 
-**処理内容:** TranslateGemma 12Bを使用して、英語で生成された中間出力（チャンク分析、
-コンセプトグラフ、シラバス）を日本語に翻訳します。
+出力: `06_audio/ep01.mp3` ... / `06_audio.json`
 
-**翻訳対象:**
+---
+
+### ステージ 5: 日本語翻訳（Translator）
+
+`cogito/services/translator/` が英語で生成された中間出力を TranslateGemma 12B で日本語に翻訳します。
+
+翻訳対象:
 - `02_chunk_analyses.md` → `02_chunk_analyses_ja.md`
 - `03_concept_graph.md` → `03_concept_graph_ja.md`
 - `04_syllabus.md` → `04_syllabus_ja.md`
 
-**注意:** 台本（`05_scripts.md`）は最初から日本語で生成されるため、翻訳対象外です。
-チャンク（`01_chunks.md`）はデカルトの原文であり、翻訳は行いません。
-
-`--skip-translate` フラグで翻訳ステップをスキップできます。
+> 台本（`05_scripts.json`）は最初から日本語で生成されるため翻訳対象外です。
 
 ---
 
-## LLM トレーシング（Arize Phoenix）
+## 出力ファイル構成
 
-`--trace` フラグを付けると、ローカルに Arize Phoenix UI が起動し、全 LLM 呼び出しの入出力・レイテンシをリアルタイムで可視化できます。
+```
+data/run_YYYYMMDD_HHMMSS/
+  01_chunks.json               ← ChunksV1（Route A のみ）
+  02_chunk_analyses.json       ← チャンク別概念抽出（Route A のみ）
+  03_concept_graph.json        ← ConceptGraphV1（両ルート）
+  04_syllabus.json             ← SyllabusV1（エピソード計画）
+  05_scripts.json              ← list[ScriptV1]（対話台本）
+  06_audio/                    ← MP3 ファイル（--skip-audio でなければ）
+    ep01.mp3 ...
+  06_audio.json                ← 音声合成メタデータ
+  02_chunk_analyses_ja.md      ← 日本語翻訳（--skip-translate でなければ）
+  03_concept_graph_ja.md
+  04_syllabus_ja.md
+
+data/checkpoints.db            ← LangGraph SQLite チェックポイント（--resume 用）
+logs/run_YYYYMMDD_HHMMSS.json  ← 思考ログ（全 LLM プロンプト・レスポンス）
+```
+
+---
+
+## サービスの個別実行
+
+各サービスは独立して実行できます（部分的な再実行やデバッグに有用）。
 
 ```bash
-python3 main.py --mode essence --trace
+# Ingestor: Book config → ChunksV1
+python -m cogito.services.ingestor \
+    --book descartes_discourse \
+    --output data/run_xxx/01_chunks.json
+
+# Analyst: ChunksV1 → ConceptGraphV1
+python -m cogito.services.analyst \
+    --input  data/run_xxx/01_chunks.json \
+    --output data/run_xxx/03_concept_graph.json
+
+# WebResearcher: テーマ → ConceptGraphV1
+python -m cogito.services.web_researcher \
+    --subject "カント 純粋理性批判" \
+    --author  "イマヌエル・カント" \
+    --output  data/run_xxx/03_concept_graph.json
+
+# Producer: ConceptGraphV1 → Syllabus + Scripts
+python -m cogito.services.producer \
+    --input  data/run_xxx/03_concept_graph.json \
+    --output data/run_xxx/ \
+    --mode   curriculum \
+    --persona descartes_default
+
+# Web 検索テスト
+python -m cogito.services.web_researcher.web_search --engine auto "Descartes Cogito"
 ```
-
-起動後、ターミナルに表示される URL（通常 `http://localhost:6006`）をブラウザで開くと、各ステージ（analyst, synthesizer, planner 等）のスパンがトレースとして表示されます。デバッグや性能分析に便利です。
-
----
-
-## 思考ログ（Thinking Log）
-
-`logs/run_YYYYMMDD_HHMMSS.json` に、パイプラインの全決定過程が記録されます。
-各ステップには以下の情報が含まれます:
-
-```json
-{
-  "timestamp": "2026-02-09T01:01:31.123456",
-  "layer": "reader",
-  "node": "analyst",
-  "action": "analyze_chunk:PART IV",
-  "input_summary": "Chunk 'PART IV': 15597 chars",
-  "llm_prompt": "You are a philosopher performing hermeneutic analysis...",
-  "llm_raw_response": "{ \"concepts\": [...] }",
-  "parsed_output": { ... },
-  "error": null,
-  "reasoning": "Extracted 5 concepts, 1 aporias, 3 relations from PART IV"
-}
-```
-
-### 概念の追跡方法
-
-1. `03_concept_graph.json` で対象の概念を見つける（例: `cogito_ergo_sum`）
-2. `source_chunk` を確認する（例: `PART IV`）
-3. 思考ログを開き、`action: "analyze_chunk:PART IV"` のステップを見つける
-4. `llm_prompt` でモデルに送られた正確なプロンプトを確認
-5. `llm_raw_response` でモデルの生の出力を確認
-6. `parsed_output` と比較して、解析で情報が失われていないか確認
-
-### 概念が欠落している場合のデバッグ
-
-1. `02_chunk_analyses.json` を確認 - チャンクレベルで概念が抽出されていたか？
-   - 抽出されていない場合: アナリストのプロンプト調整が必要、またはチャンクが切り詰められている
-   - 抽出されていた場合: シンセサイザーが統合時にマージしてしまった。ログのシンセサイザーステップを確認
-2. シンセサイザーステップの `llm_raw_response` でマージの判断内容を確認
 
 ---
 
 ## モデル選択ガイド
 
-| 役割 | 推奨 | 最低要件 | 備考 |
+| 用途 | 推奨モデル | 最小要件 | 備考 |
 |---|---|---|---|
-| Reader/Director | `command-r` (18GB) | `llama3` (4.7GB) | 大きいほど概念抽出の質が向上 |
-| Dramaturg | `qwen3-next` (50GB) | `llama3` (4.7GB) | Qwenモデルは日本語に優れる |
-| Translator | `translategemma:12b` | - | Google TranslateGemma、55言語対応 |
+| 分析・計画（`--reader-model`） | `command-r` 18GB | `llama3` 4.7GB | 大きいほど概念抽出品質が向上 |
+| 台本生成（`--dramaturg-model`） | `qwen3-next` 50GB | `llama3` 4.7GB | Qwen 系は日本語に優れる |
+| 翻訳（`--translator-model`） | `translategemma:12b` | — | `--skip-translate` でスキップ可 |
 
-**Reader/Directorモデル** はJSON出力が必須のため、`format="json"` が有効化されています。
-**Dramaturgモデル** はJSON構造を含む自由形式テキストを生成するため、JSONモードは強制しません。
-**Translatorモデル** は翻訳専用で、特別なプロンプト形式を使用します。
-
-**注意:** PlannerステージはReaderモデル（command-r）を使用しますが、日本語生成の品質問題を
-避けるため、全出力を英語で生成します。日本語版はTranslateGemmaによる翻訳で提供されます。
+**注意:**
+- `format="json"` が Reader モデルに必須（JSON 構造を確実に返させるため）
+- 台本生成は JSON を含む自由形式テキストのため JSON モード強制なし
+- Planner（計画）は English 出力を使用（LLM の日本語 JSON 生成が不安定なため）。日本語版は翻訳ステージで生成
 
 ---
 
 ## ペルソナ設定
 
-`config/personas.yaml` を編集して、新しいペルソナプリセットの作成や既存プリセットの
-変更ができます。各プリセットは2つのキャラクター（`persona_a` と `persona_b`）を定義します:
-
-- `name`: 対話で使用されるキャラクター名
-- `role`: 役割の説明（日本語）
-- `description`: キャラクターの詳細な説明
-- `tone`: 話し方のトーン（日本語）
-- `speaking_style`: キャラクターの話し方のスタイル
-
-ペルソナの記述はDramaturgのプロンプトに直接注入されます。
-日本語と英語を混ぜて記述すると効果的です。日本語の部分がモデルの出力トーンを誘導し、
-英語の部分が明確な指示を提供します。
-
-### 利用可能なプリセット
+`config/personas.yaml` でキャラクターと VOICEVOX スピーカー ID を定義します。
 
 | プリセット名 | persona_a | persona_b | スタイル |
 |---|---|---|---|
-| `descartes_default` | Host（現代の懐疑論者） | Descartes（哲学者の亡霊） | 現代的なアナロジーで哲学を語る |
+| `descartes_default` | Host（現代の懐疑論者） | Descartes（哲学者の亡霊） | 現代的アナロジーで哲学を語る |
 | `socratic` | Student（哲学初心者） | Mentor（哲学の案内人） | ソクラテス式問答法 |
 | `debate` | Advocate（著者の擁護者） | Critic（批判的検証者） | 弁証法的な激しい議論 |
 
 ---
 
-## トラブルシューティング
+## 思考ログ（デバッグ用）
 
-### 概念が0個のチャンクがある
-- **原因:** LLMのJSON出力が不正。テキストの前置きが含まれている可能性。
-- **対策:** 思考ログの `llm_raw_response` を確認。`format="json"` がChatOllamaで有効か確認。
+`logs/run_YYYYMMDD_HHMMSS.json` に全 LLM 呼び出しが記録されます。
 
-### シンセサイザーが概念を過度に圧縮する
-- **原因:** 小さいモデル（llama3）は概念を4-5個に圧縮しがち。
-- **対策:** `--reader-model command-r` で大きなモデルを使用。
+```json
+{
+  "timestamp": "2026-03-01T10:00:00.000000",
+  "layer": "analyst",
+  "node": "extractor",
+  "action": "analyze_chunk:PART IV",
+  "input_summary": "Chunk 'PART IV': 15597 chars",
+  "llm_prompt": "You are a philosopher ...",
+  "llm_raw_response": "{ \"concepts\": [...] }",
+  "parsed_output": { "concepts": [...] },
+  "error": null,
+  "reasoning": "Extracted 5 concepts, 1 aporias, 3 relations from PART IV"
+}
+```
 
-### Plannerの出力が文字化けしている
-- **原因:** command-rは日本語生成が不安定。
-- **対策:** Plannerは英語出力に設定済み。翻訳ステージで日本語版を生成。
+**概念が欠落している場合のデバッグ手順:**
+1. `02_chunk_analyses.json` でチャンクレベルで抽出されていたか確認
+2. 抽出されていた → `synthesizer` ステップの `llm_raw_response` を確認（統合時に消された可能性）
+3. 抽出されていない → `extractor` ステップの `llm_raw_response` を確認（JSON 解析失敗の可能性）
 
-### 対話の行数が目標（50-65行）に届かない
-- **原因:** qwen3-nextの生成傾向として、プロンプトの目標行数より少なく終わることがある。
-- **対策:** 今後の改善で、マルチパス生成（生成後に拡張）を検討。
+---
 
-### Python関連
-- `python` コマンドが見つからない場合は `python3` を使用（Python 3.14環境）
-- `langchain_core` のPydantic V1非推奨警告は無害（Python 3.14との互換性問題）
+## よくあるトラブル
+
+| 症状 | 原因 | 対策 |
+|---|---|---|
+| 概念が 0 個のチャンクがある | LLM の JSON 出力が不正 | 思考ログの `llm_raw_response` を確認 |
+| コンセプトグラフの概念が少ない | モデルが小さすぎる | `--reader-model command-r` を使用 |
+| Ollama がハングする | Apple Silicon での並列実行問題 | `OLLAMA_KEEP_ALIVE=120m OLLAMA_NUM_PARALLEL=1 ollama serve` |
+| `relation_type` バリデーションエラー | LLM が enum 外の値を返した | 想定済み既知の問題（`'related_to'` 等を返すことがある） |
+| VOICEVOX に接続できない | エンジンが起動していない | `open -a VOICEVOX` でエンジンを起動 |
+| Web 検索が動作しない | API キー未設定 | `.env` に `TAVILY_API_KEY=tvly-xxx` を追加 |
+
+---
+
+## 詳細ドキュメント
+
+- [アーキテクチャ](docs/architecture-v2.md) — サービス設計、スキーマ、データフロー
+- [使い方ガイド](docs/usage-guide-v2.md) — 完全な CLI リファレンス、設定例
+- [データスキーマ](docs/data-schema-reference.md) — Pydantic スキーマの詳細
+- [デバッグガイド](docs/debugging-guide.md) — LLM 呼び出しのトレースと問題解決
