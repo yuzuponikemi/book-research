@@ -130,20 +130,56 @@ def synthesize_concept_graph(
     num_ctx = 32768 if any(m in model for m in ("qwen3", "command-r")) else 16384
     llm = ChatOllama(model=model, temperature=0.1, num_ctx=num_ctx, format="json")
 
-    analyses_summary = [
-        {
-            "chunk_index": i,
-            "concepts": a.get("concepts", []),
-            "aporias": a.get("aporias", []),
-            "relations": a.get("relations", []),
-            "logic_flow": a.get("logic_flow", ""),
-        }
-        for i, a in enumerate(chunk_analyses)
-    ]
+    # Build compact representation so ALL chunks fit within the context window.
+    # Full analyses can exceed 90K chars; we distil each to essential fields only.
+    analyses_summary = []
+    for i, a in enumerate(chunk_analyses):
+        compact_concepts = [
+            {
+                "id": c.get("id", ""),
+                "name": c.get("name", ""),
+                # Keep first 150 chars of description — enough for deduplication
+                "description": (c.get("description") or "")[:150],
+                # Only first quote per concept
+                "quote": (c.get("original_quotes") or [""])[0][:120],
+            }
+            for c in a.get("concepts", [])
+        ]
+        compact_relations = [
+            {
+                "source": r.get("source", ""),
+                "target": r.get("target", ""),
+                "type": r.get("relation_type", ""),
+            }
+            for r in a.get("relations", [])
+        ]
+        compact_aporias = [
+            {
+                "id": ap.get("id", ""),
+                "question": (ap.get("question") or "")[:150],
+                "related": ap.get("related_concepts", []),
+            }
+            for ap in a.get("aporias", [])
+        ]
+        analyses_summary.append({
+            "chunk": i,
+            "logic": (a.get("logic_flow") or "")[:200],
+            "concepts": compact_concepts,
+            "relations": compact_relations,
+            "aporias": compact_aporias,
+        })
 
     analyses_json = json.dumps(analyses_summary, ensure_ascii=False, indent=2)
-    if len(analyses_json) > 25000:
-        analyses_json = analyses_json[:25000] + "\n... (truncated)"
+    # Warn if still large, but allow up to 55000 chars (fits in 32K token context)
+    if len(analyses_json) > 55000:
+        # Last resort: drop quotes and trim descriptions further
+        for chunk in analyses_summary:
+            for c in chunk.get("concepts", []):
+                c.pop("quote", None)
+                c["description"] = c.get("description", "")[:80]
+        analyses_json = json.dumps(analyses_summary, ensure_ascii=False, indent=2)
+        if len(analyses_json) > 55000:
+            analyses_json = analyses_json[:55000] + "\n... (truncated)"
 
     prompt = SYNTHESIS_PROMPT.format(
         chunk_count=len(chunk_analyses),
