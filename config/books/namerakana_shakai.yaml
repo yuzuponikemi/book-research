@@ -1,0 +1,104 @@
+book:
+  title: "なめらかな社会とその敵"
+  title_ja: "なめらかな社会とその敵"
+  author: "鈴木健"
+  author_ja: "鈴木健"
+  year: 2013
+
+source:
+  type: "web"
+
+chunking:
+  strategy: "token"
+  max_tokens: 15000
+
+research:
+  search_queries:
+    - "鈴木健 なめらかな社会とその敵 PICSY"
+    - "Smooth Society PICSY Propagational Investment Currency System Ken Suzuki"
+    - "分人民主主義 dividual democracy 鈴木健"
+    - "構成的社会契約 なめらかな社会 社会システム理論"
+    - "なめらかな社会とその敵 書評 思想"
+    - "PICSY 伝播投資貨幣 経済システム 設計"
+    - "分人 平野啓一郎 鈴木健 個人と分人"
+    - "なめらかな社会 国家 企業 核家族 離散的制度 連続体"
+  reference_files: []
+  max_search_results: 5
+
+web_research:
+  headings:
+    - id: "nameraka_philosophy"
+      title: "なめらかさの哲学（連続性・微分可能性・境界の溶解）"
+      description: "「なめらかさ」とは何か。離散と連続の対立、境界の溶解、微分可能性の社会的意味を問う本書の根幹概念"
+    - id: "natural_intelligence"
+      title: "自然知性（Natural Intelligence）"
+      description: "鈴木が提唱する「自然知性」概念。人工知能との対比、社会システムに内在する知性、なめらかさが生み出す集合的知性"
+    - id: "enemies"
+      title: "離散的制度としての敵：国家・企業・核家族"
+      description: "なぜ国家・企業・核家族が「敵」とされるか。境界明確な離散的制度が生む硬直性・排他性・権力集中の問題"
+    - id: "picsy"
+      title: "PICSY（伝播投資貨幣システム）のメカニズム"
+      description: "価値が社会ネットワーク上を伝播・希釈される貨幣設計。既存の貨幣・信用・投資システムとの比較"
+    - id: "dividual_democracy"
+      title: "分人民主主義（Dividual Democracy）"
+      description: "投票権の委任・伝播による流動的民主主義。一般意志・多数決民主主義の限界を超える構造"
+    - id: "constitutive_social_contract"
+      title: "構成的社会契約（Constitutive Social Contract）"
+      description: "参加者の行為によって社会が構成されるという新たな社会契約論。ルソーの社会契約論との比較"
+    - id: "individual_and_dividual"
+      title: "個人と分人（Individual vs Dividual）"
+      description: "「個人」概念の批判と「分人」概念の導入。平野啓一郎との共鳴・差異、自己の複数性と境界の問い"
+    - id: "freedom_and_nature"
+      title: "自由と自然の哲学的関係"
+      description: "自由概念の再定義、自然と人間の連続性、なめらかな社会における自由論の位置づけ"
+    - id: "propagation_mechanism"
+      title: "伝播（Propagation）という原理"
+      description: "価値・情報・影響力がネットワーク上で伝播・希釈されるメカニズム。伝播が生む社会的連帯と自己組織化"
+    - id: "social_systems_dialogue"
+      title: "社会システム論・複雑系との対話"
+      description: "ルーマンの社会システム論、複雑系科学、ネットワーク理論との関係。本書の理論的背景と位置づけ"
+    - id: "feasibility_critique"
+      title: "なめらかな社会の実現可能性と批判的検討"
+      description: "提案の実装可能性、技術的前提、予想される反論、既存制度との摩擦点"
+
+context:
+  era: "2013年代"
+  tradition: "社会システム論、制度設計、貨幣論、民主主義理論"
+  key_terms:
+    - "なめらかな社会（Smooth Society）"
+    - "PICSY（Propagational Investment Currency System／伝播投資貨幣システム）"
+    - "分人民主主義（Dividual Democracy）"
+    - "構成的社会契約（Constitutive Social Contract）"
+    - "伝播（Propagation）"
+    - "離散的制度（Discrete Institutions）"
+    - "連続体（Continuum）"
+    - "国家・企業・核家族（その敵）"
+    - "自然と自由"
+    - "ネットワーク貨幣"
+    - "投票権の伝播"
+    - "社会契約論"
+  notable_critics:
+    - name: "平野啓一郎"
+      perspective: "「分人」概念の独立した提唱者。個人の複数性・分人主義を文学・哲学から論じる"
+    - name: "ジャン＝ジャック・ルソー"
+      perspective: "古典的社会契約論の代表。鈴木の構成的社会契約はルソーの一般意志概念を批判的に継承・刷新する"
+    - name: "東浩紀"
+      perspective: "情報社会・データベース的世界観から民主主義とアーキテクチャを論じる。類似の問題意識を共有"
+    - name: "ニコラス・クリスタキス"
+      perspective: "社会ネットワーク分析の観点から、感情・行動・影響力の伝播を実証的に研究"
+
+prompt_fragments:
+  work_description: >
+    「なめらかな社会とその敵」（2013年、勁草書房）は、鈴木健による社会哲学・制度設計の著作。
+    国家・企業・核家族といった「離散的・境界明確な制度」（＝「敵」）に代わり、
+    伝播と連続性を原理とする「なめらかな社会」を構想する。
+    核心的提案は三つ：① PICSY（伝播投資貨幣システム）―価値が社会ネットワーク上を
+    伝播・希釈される貨幣設計；② 分人民主主義―投票権が委任・伝播によって分散する
+    民主主義システム；③ 構成的社会契約―参加者の行為によって社会が構成される新たな
+    社会契約論。自由と自然の関係、個人と集合体の境界をめぐる哲学的問いを軸に展開される。
+  analysis_guidance: >
+    以下の点に注目すること：PICSY の伝播メカニズムと既存の貨幣・信用システムとの差異；
+    分人民主主義が一般意志・多数決民主主義のどの問題を解決しようとしているか；
+    「なめらかさ」の哲学的意味（連続性・微分可能性・境界の溶解）；
+    国家・企業・核家族がなぜ「敵」とされるか（離散性・硬直性の問題）；
+    著者が想定する自由論・自然概念の位置づけ。
