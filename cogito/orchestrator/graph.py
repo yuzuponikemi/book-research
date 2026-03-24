@@ -7,6 +7,9 @@ Topology:
           → (if not skip_research) → web_research → produce
           → (if skip_research) → produce
     produce
+      → (if not skip_eval) → evaluate_scripts → (regen or write_essay)
+      → (if skip_eval) → write_essay
+    write_essay
       → (if not skip_audio) → synthesize_audio → check_translate
       → (if skip_audio) → check_translate
     check_translate
@@ -151,6 +154,38 @@ def node_evaluate_scripts(state: CogitoState) -> dict:
     return evaluate_scripts(state)
 
 
+def node_write_essay(state: CogitoState) -> dict:
+    """Generate an analytical essay from the concept graph (always runs)."""
+    from cogito.services.producer.essay_writer import write_essay
+    from cogito.schemas.concept_graph import ConceptGraphV1
+
+    event_log.step("orchestrator/graph", "→ node: write_essay")
+    graph_path = state.get("concept_graph_path", "")
+    run_dir = state.get("run_dir", "")
+    book_config = state.get("book_config", {})
+    dramaturg_model = state.get("dramaturg_model", "qwen3.5:latest")
+
+    try:
+        with open(graph_path, encoding="utf-8") as f:
+            graph_data = json.load(f)
+        concept_graph = ConceptGraphV1.from_legacy_dict(
+            graph_data, subject=state.get("book_title", ""), source_mode="book"
+        )
+        essay_path = write_essay(
+            concept_graph=concept_graph,
+            book_config=book_config,
+            run_dir=run_dir,
+            model=dramaturg_model,
+        )
+        return {"thinking_log": state.get("thinking_log", []) + [{
+            "layer": "producer", "node": "write_essay", "action": "write_essay",
+            "output": f"Essay saved: {essay_path}",
+        }]}
+    except Exception as e:
+        print(f"  [write_essay] error (non-fatal): {e}")
+        return {}
+
+
 def node_synthesize_audio(state: CogitoState) -> dict:
     from cogito.services.audio.synthesizer import synthesize_audio
     return synthesize_audio(state)
@@ -182,11 +217,9 @@ def should_research(state: CogitoState) -> str:
 
 
 def should_eval(state: CogitoState) -> str:
-    """Decide whether to run the evaluation node or skip directly to audio routing."""
+    """Decide whether to run the evaluation node or skip directly to essay."""
     if state.get("skip_eval", False):
-        if state.get("skip_audio", False):
-            return "check_translate"
-        return "synthesize_audio"
+        return "write_essay"
     return "evaluate_scripts"
 
 
@@ -194,6 +227,10 @@ def should_regen(state: CogitoState) -> str:
     """Decide whether to regenerate scripts based on evaluation."""
     if state.get("needs_regen", False) and state.get("regen_count", 0) < 2:
         return "produce"  # regenerate (max 2 attempts)
+    return "write_essay"
+
+
+def should_audio(state: CogitoState) -> str:
     if state.get("skip_audio", False):
         return "check_translate"
     return "synthesize_audio"
@@ -228,6 +265,7 @@ def build_graph(checkpointer=None):
     graph.add_node("web_research", node_web_research)
     graph.add_node("produce", node_produce)
     graph.add_node("evaluate_scripts", node_evaluate_scripts)
+    graph.add_node("write_essay", node_write_essay)
     graph.add_node("synthesize_audio", node_synthesize_audio)
     graph.add_node("check_translate", _check_translate_noop)
     graph.add_node("translate", node_translate)
@@ -256,14 +294,13 @@ def build_graph(checkpointer=None):
     )
     graph.add_edge("web_research", "produce")
 
-    # Produce → eval (optional) → regen or audio → translate (optional) → END
+    # Produce → eval (optional) → regen or write_essay → audio → translate → END
     graph.add_conditional_edges(
         "produce",
         should_eval,
         {
             "evaluate_scripts": "evaluate_scripts",
-            "synthesize_audio": "synthesize_audio",
-            "check_translate": "check_translate",
+            "write_essay": "write_essay",
         },
     )
     graph.add_conditional_edges(
@@ -271,6 +308,13 @@ def build_graph(checkpointer=None):
         should_regen,
         {
             "produce": "produce",
+            "write_essay": "write_essay",
+        },
+    )
+    graph.add_conditional_edges(
+        "write_essay",
+        should_audio,
+        {
             "synthesize_audio": "synthesize_audio",
             "check_translate": "check_translate",
         },

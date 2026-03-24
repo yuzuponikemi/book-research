@@ -19,54 +19,91 @@ from cogito.schemas.concept_graph import ConceptGraphV1
 
 
 SYNTHESIS_PROMPT = """\
-You are synthesizing multiple chunk-level analyses into a unified concept graph.
+You are synthesizing multiple chunk-level analyses into a rich, unified concept graph.
 
 Below are analyses from {chunk_count} chunks of {work_description}.
 
-IMPORTANT: Preserve richness. The final graph should have 10-20 unified concepts, NOT fewer. \
-Only merge concepts that are truly the same idea. Different aspects of a broad concept \
-(e.g., "concept X as theoretical framework" vs "concept X applied in practice") \
-should remain as separate concepts with a relation between them.
+PHILOSOPHY: This graph is the intellectual backbone of a deep reading. \
+Every relation and every aporia is a thread the scriptwriter will pull. \
+If you discard a relation or aporia, it will NEVER appear in the final output. \
+When in doubt, KEEP IT.
 
-Your tasks:
+## Task 1: Deduplicate concepts (CONSERVATIVE — only true duplicates)
 
-1. **Deduplicate concepts**: If the EXACT SAME concept appears across chunks (possibly \
-with different names), merge them. Keep the richest description and ALL unique quotes. \
-For each merged concept, set source_chunk to "COMBINED" and note which parts it spans.
-   - Do NOT merge concepts that are merely related — only true duplicates.
-   - Aim for 10-20 concepts in the final graph.
+Merge ONLY if two concepts are literally the same idea under different names. \
+Do NOT merge because they are related, overlapping, or thematically similar.
 
-2. **Build cross-chunk relations**: Identify ALL conceptual dependencies across chunks. \
-Trace the full chain of how ideas build on, contradict, or evolve from each other. \
-Map every significant dependency.
-   - Aim for at least 8-12 relations.
+- Keep ALL unique concepts. Aim for **12-20 concepts** in the final graph.
+- For merged concepts, keep the richest description and ALL unique original_quotes combined.
+- Set source_chunk to "COMBINED (PART X + PART Y)" for merged concepts.
+- Write each description in 3-5 sentences: what it is, why the author introduces it, \
+  what problem it solves, and how it evolves through the work.
 
-3. **Identify the core frustration**: What is the single driving tension of the entire work? \
-This is NOT a summary. It's the unresolved intellectual itch that the author cannot fully \
-scratch, the question that haunts every chapter.
+## Task 2: Build the full relation map (MAXIMIZE — keep all significant connections)
 
-4. **Preserve ALL aporias**: Merge duplicates but keep distinct tensions separate. \
-Aim for 4-8 aporias in the final graph.
+Map EVERY meaningful conceptual relationship across ALL chunks.
+- **Minimum: 10 relations. Aim for 12-18.**
+- Include both intra-chunk relations (from individual chunks) AND new cross-chunk \
+  relations you discover when seeing the complete picture together.
+- For each relation, write a 2-3 sentence evidence explaining the intellectual link.
+- Relation types:
+  - "depends_on": concept A only makes sense once concept B is established
+  - "contradicts": concept A and concept B are in genuine, unresolved tension
+  - "evolves_into": concept A develops or transforms into concept B over the course of the work
 
-5. **Create the unified logic flow**: A detailed narrative (at least 6-8 sentences) tracing \
-the entire reasoning chain from beginning to end. Explain what drives each transition.
+## Task 3: Preserve ALL distinct aporias (MAXIMIZE — keep all unresolved tensions)
+
+An aporia is a genuine intellectual impasse the author cannot fully resolve. \
+- Keep ALL distinct aporias. **Minimum: 5 aporias. Aim for 6-10.**
+- Merge ONLY if two aporias are literally asking the exact same question.
+- For each aporia, write a 3-4 sentence context: what has been tried, \
+  why it remains unresolved, and what is at stake.
+
+## Task 4: Core frustration
+
+The single driving tension that haunts the entire work — the question the author \
+urgently wanted to answer but could not fully resolve. Write 3-4 sentences.
+
+## Task 5: Unified logic flow
+
+A narrative of 8-12 sentences tracing the full argumentative arc: from the opening \
+problem through each major conceptual move to the final (unresolved) conclusion. \
+Explain WHAT motivates each transition.
+
+---
 
 CHUNK ANALYSES:
 {analyses_json}
 
-Respond ONLY with valid JSON in this exact structure:
+Respond ONLY with valid JSON:
 {{
   "concepts": [
-    {{"id": "...", "name": "...", "description": "...", "original_quotes": ["..."], "source_chunk": "..."}}
+    {{
+      "id": "snake_case_id",
+      "name": "Display Name",
+      "description": "Rich 3-5 sentence explanation...",
+      "original_quotes": ["direct quote 1", "direct quote 2"],
+      "source_chunk": "PART I or COMBINED (PART I + PART II)"
+    }}
   ],
   "relations": [
-    {{"source": "...", "target": "...", "relation_type": "depends_on|contradicts|evolves_into", "evidence": "..."}}
+    {{
+      "source": "concept_id_a",
+      "target": "concept_id_b",
+      "relation_type": "depends_on",
+      "evidence": "2-3 sentence explanation of the intellectual link..."
+    }}
   ],
   "aporias": [
-    {{"id": "...", "question": "...", "context": "...", "related_concepts": ["..."]}}
+    {{
+      "id": "snake_case_id",
+      "question": "The tension stated as a penetrating question?",
+      "context": "3-4 sentence explanation of why this remains unresolved...",
+      "related_concepts": ["concept_id_1", "concept_id_2"]
+    }}
   ],
-  "logic_flow": "...",
-  "core_frustration": "..."
+  "logic_flow": "8-12 sentence narrative of the full argumentative arc...",
+  "core_frustration": "3-4 sentence description of the single driving tension..."
 }}
 """
 
