@@ -115,32 +115,48 @@ SCRIPT_PROMPT = """\
 
 
 def _format_concepts(graph: ConceptGraphV1, concept_ids: list[str]) -> str:
+    """Format concepts for the script prompt.
+
+    Keeps primary concepts with 1 quote (truncated) and secondary concepts
+    as name+brief description only — to stay within the context window.
+    Full prompt is ~22K chars with all quotes; this targets ~6K chars.
+    """
     primary, secondary = [], []
     for c in graph.concepts:
-        quotes = "\n".join(f'    「{q}」' for q in c.original_quotes[:3])
-        entry = f"- **{c.name}**（{c.id}）: {c.description}"
-        if quotes:
-            entry += f"\n  原著の該当箇所（参考情報）:\n{quotes}"
-        (primary if c.id in concept_ids else secondary).append(entry)
+        if c.id in concept_ids:
+            # Primary: description + 1 short quote
+            desc = (c.description or "")[:200]
+            entry = f"- **{c.name}**: {desc}"
+            if c.original_quotes:
+                q = c.original_quotes[0][:100]
+                entry += f"\n  「{q}」"
+            primary.append(entry)
+        else:
+            # Secondary: name + brief description only (no quotes)
+            desc = (c.description or "")[:100]
+            secondary.append(f"- **{c.name}**: {desc}")
     parts = []
     if primary:
         parts.append("### 主要概念（このエピソードの中心）\n" + "\n\n".join(primary))
     if secondary:
-        parts.append("### 補助概念（背景知識として参照可能）\n" + "\n\n".join(secondary))
+        parts.append("### 補助概念（参照用）\n" + "\n".join(secondary))
     return "\n\n".join(parts) if parts else "（概念情報なし）"
 
 
 def _format_aporias(graph: ConceptGraphV1, aporia_ids: list[str]) -> str:
     primary, secondary = [], []
     for a in graph.aporias:
-        related = ", ".join(a.related_concepts)
-        entry = f"- **{a.question}**\n  背景: {a.context}\n  関連概念: {related}"
+        related = ", ".join(a.related_concepts[:3])  # limit related concepts shown
+        context = (a.context or "")[:150]
+        entry = f"- **{a.question}**\n  背景: {context}\n  関連概念: {related}"
         (primary if a.id in aporia_ids else secondary).append(entry)
     parts = []
     if primary:
         parts.append("### 主要アポリア（このエピソードで正面から扱うこと）\n" + "\n\n".join(primary))
     if secondary:
-        parts.append("### 補助アポリア（言及可能）\n" + "\n\n".join(secondary))
+        # Secondary aporias: questions only to save context space
+        secondary_qs = [e.split("\n")[0] for e in secondary]
+        parts.append("### 補助アポリア（言及可能）\n" + "\n".join(secondary_qs))
     return "\n\n".join(parts) if parts else "（アポリア情報なし）"
 
 
@@ -169,9 +185,9 @@ def write_podcast_scripts(
     Returns:
         (list[ScriptV1], thinking_log_entries)
     """
-    # num_ctx=32768 causes qwen3.5 to exhaust KV cache and hang.
-    # Script prompts are ~2K tokens; 8192 gives ~6K tokens for the output (enough for 100+ lines).
-    _script_ctx = 8192 if any(m in dramaturg_model for m in ("qwen3", "qwq")) else 32768
+    # Prompt is ~3.5K tokens after slimming; 16384 gives ~12K tokens for the output.
+    # 32768 caused qwen3.5 KV cache exhaustion; 8192 left too little room for output.
+    _script_ctx = 16384 if any(m in dramaturg_model for m in ("qwen3", "qwq")) else 32768
     llm = ChatOllama(model=dramaturg_model, temperature=0.7, num_ctx=_script_ctx)
 
     book_title = book_title or graph.subject
