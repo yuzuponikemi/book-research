@@ -34,8 +34,8 @@ class Episode(BaseModel):
     theme: str
     concept_ids: list[str] = Field(default_factory=list)
     aporia_ids: list[str] = Field(default_factory=list)
-    cliffhanger: str
-    cognitive_bridge: str
+    cliffhanger: str = ""
+    cognitive_bridge: str = ""
 
 
 class SyllabusV1(BaseModel):
