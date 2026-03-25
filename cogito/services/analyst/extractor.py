@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from langchain_ollama import ChatOllama
 
@@ -172,30 +173,49 @@ def extract_all_chunks(
     chunks: list[tuple[str, str]],  # [(part_id, text), ...]
     model: str = "llama3",
     key_terms: list[str] | None = None,
+    max_workers: int = 4,
 ) -> tuple[list[dict], list[dict]]:
-    """Analyse all chunks sequentially.
+    """Analyse all chunks in parallel.
 
     Args:
-        chunks:    List of (part_id, text) tuples.
-        model:     Ollama model name.
-        key_terms: Optional list of expected concept terms.
+        chunks:      List of (part_id, text) tuples.
+        model:       Ollama model name.
+        key_terms:   Optional list of expected concept terms.
+        max_workers: Number of parallel threads (default: 4).
 
     Returns:
         (chunk_analyses, thinking_log)
     """
     num_ctx = 32768 if any(m in model for m in ("qwen3", "command-r")) else 16384
-    llm = ChatOllama(model=model, temperature=0.1, num_ctx=num_ctx, format="json")
+    _is_thinking = any(m in model.lower() for m in ("qwen3", "qwq", "deepseek-r1"))
+    llm = ChatOllama(
+        model=model, temperature=0.1, num_ctx=num_ctx,
+        **({"format": "json"} if _is_thinking else {}),
+    )
 
-    analyses: list[dict] = []
-    log: list[dict] = []
+    n = len(chunks)
+    print(f"      Parallel extraction: {n} chunks, max_workers={max_workers}")
 
-    for i, (part_id, text) in enumerate(chunks):
-        print(f"      [{i+1}/{len(chunks)}] Extracting {part_id}...", end="", flush=True)
+    results: dict[int, tuple[dict, dict]] = {}
+
+    def _run(idx: int, part_id: str, text: str) -> tuple[int, dict, dict]:
         analysis, step = extract_chunk(text, part_id, llm, key_terms=key_terms)
         n_c = len(analysis.get("concepts", []))
         n_a = len(analysis.get("aporias", []))
-        print(f" {n_c} concepts, {n_a} aporias")
-        analyses.append(analysis)
-        log.append(step)
+        print(f"      [{idx+1}/{n}] ✓ {part_id}: {n_c} concepts, {n_a} aporias", flush=True)
+        return idx, analysis, step
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_run, i, part_id, text): i
+            for i, (part_id, text) in enumerate(chunks)
+        }
+        for future in as_completed(futures):
+            idx, analysis, step = future.result()
+            results[idx] = (analysis, step)
+
+    # Reassemble in original order
+    analyses = [results[i][0] for i in range(n)]
+    log = [results[i][1] for i in range(n)]
 
     return analyses, log

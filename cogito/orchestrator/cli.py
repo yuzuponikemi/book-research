@@ -279,10 +279,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--topic", default=None)
     parser.add_argument("--persona", default="professor_student")
     # Models
-    parser.add_argument("--reader-model", default="llama3")
+    parser.add_argument("--reader-model", default="glm-4.7-flash:latest")
     parser.add_argument("--synthesizer-model", default=None,
                         help="概念グラフ合成モデル (未指定なら --reader-model を使用)")
-    parser.add_argument("--dramaturg-model", default="qwen3-coder-next")
+    parser.add_argument("--dramaturg-model", default="glm-4.7-flash:latest")
     parser.add_argument("--translator-model", default="translategemma:12b")
     # Flags
     parser.add_argument("--skip-research", action="store_true")
