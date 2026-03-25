@@ -69,10 +69,15 @@ def extract_json(text: str) -> dict:
     """Extract JSON from LLM output, handling various formats.
 
     Tries in order:
-    1. ```json ... ``` code fences
-    2. ``` ... ``` code fences
-    3. First { to last } (bare JSON with text preamble)
+    1. Strip <think>...</think> blocks (qwen3.5 and other thinking models)
+    2. ```json ... ``` code fences
+    3. ``` ... ``` code fences
+    4. First { to last } (bare JSON with text preamble)
     """
+    # Strip thinking blocks from reasoning models (e.g. qwen3.5, deepseek-r1)
+    import re
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
     # Try code fences first
     if "```json" in text:
         json_text = text.split("```json")[1].split("```")[0]
