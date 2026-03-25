@@ -147,6 +147,7 @@ def _build_initial_state(args: argparse.Namespace, run_id: str) -> CogitoState:
         "topic": args.topic,
         "persona_config": persona_config,
         "reader_model": args.reader_model,
+        "synthesizer_model": getattr(args, "synthesizer_model", None) or args.reader_model,
         "dramaturg_model": args.dramaturg_model,
         "translator_model": args.translator_model,
         "work_description": work_description,
@@ -279,6 +280,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--persona", default="professor_student")
     # Models
     parser.add_argument("--reader-model", default="llama3")
+    parser.add_argument("--synthesizer-model", default=None,
+                        help="概念グラフ合成モデル (未指定なら --reader-model を使用)")
     parser.add_argument("--dramaturg-model", default="qwen3-coder-next")
     parser.add_argument("--translator-model", default="translategemma:12b")
     # Flags

@@ -185,11 +185,13 @@ def write_podcast_scripts(
     Returns:
         (list[ScriptV1], thinking_log_entries)
     """
-    # format="json" forces structured JSON output and bypasses qwen3.5 thinking mode issues.
-    # num_ctx=8192: prompt is ~3K tokens after slimming, leaving ~5K tokens for output.
-    # (16384+ causes qwen3.5 KV cache exhaustion on this GPU.)
-    _script_ctx = 8192 if any(m in dramaturg_model for m in ("qwen3", "qwq")) else 16384
-    llm = ChatOllama(model=dramaturg_model, temperature=0.7, num_ctx=_script_ctx, format="json")
+    # qwen3 models need format="json" to bypass thinking mode (see FINDINGS.md in ollama-bench).
+    # glm-4.7-flash and llama3 output content directly — format="json" reduces quality for them.
+    _is_thinking_model = any(m in dramaturg_model for m in ("qwen3", "qwq"))
+    _script_ctx = 8192 if _is_thinking_model else 16384
+    _fmt = "json" if _is_thinking_model else None
+    llm = ChatOllama(model=dramaturg_model, temperature=0.7, num_ctx=_script_ctx,
+                     **({"format": _fmt} if _fmt else {}))
 
     book_title = book_title or graph.subject
     book_title_ja = book_title_ja or book_title

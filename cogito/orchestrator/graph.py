@@ -82,7 +82,7 @@ def node_synthesize_graph(state: CogitoState) -> dict:
         state["chunk_analyses"],
         work_description=work_description,
         subject=work_description,
-        model=state["reader_model"],
+        model=state.get("synthesizer_model") or state["reader_model"],
     )
     run_dir = Path(state["run_dir"])
     cg_path = run_dir / "03_concept_graph.json"

@@ -10,8 +10,9 @@ class CogitoState(TypedDict):
     mode: str
     topic: str | None
     persona_config: dict
-    reader_model: str
-    dramaturg_model: str
+    reader_model: str        # chunk extraction + planner
+    synthesizer_model: str   # concept graph synthesis (defaults to reader_model)
+    dramaturg_model: str     # script + essay writing
     translator_model: str
     work_description: str
 
