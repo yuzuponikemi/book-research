@@ -169,7 +169,10 @@ def write_podcast_scripts(
     Returns:
         (list[ScriptV1], thinking_log_entries)
     """
-    llm = ChatOllama(model=dramaturg_model, temperature=0.7, num_ctx=32768)
+    # num_ctx=32768 causes qwen3.5 to exhaust KV cache and hang.
+    # Script prompts are ~2K tokens; 8192 gives ~6K tokens for the output (enough for 100+ lines).
+    _script_ctx = 8192 if any(m in dramaturg_model for m in ("qwen3", "qwq")) else 32768
+    llm = ChatOllama(model=dramaturg_model, temperature=0.7, num_ctx=_script_ctx)
 
     book_title = book_title or graph.subject
     book_title_ja = book_title_ja or book_title
