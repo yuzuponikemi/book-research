@@ -185,10 +185,11 @@ def write_podcast_scripts(
     Returns:
         (list[ScriptV1], thinking_log_entries)
     """
-    # Prompt is ~3.5K tokens after slimming; 16384 gives ~12K tokens for the output.
-    # 32768 caused qwen3.5 KV cache exhaustion; 8192 left too little room for output.
-    _script_ctx = 16384 if any(m in dramaturg_model for m in ("qwen3", "qwq")) else 32768
-    llm = ChatOllama(model=dramaturg_model, temperature=0.7, num_ctx=_script_ctx)
+    # format="json" forces structured JSON output and bypasses qwen3.5 thinking mode issues.
+    # num_ctx=8192: prompt is ~3K tokens after slimming, leaving ~5K tokens for output.
+    # (16384+ causes qwen3.5 KV cache exhaustion on this GPU.)
+    _script_ctx = 8192 if any(m in dramaturg_model for m in ("qwen3", "qwq")) else 16384
+    llm = ChatOllama(model=dramaturg_model, temperature=0.7, num_ctx=_script_ctx, format="json")
 
     book_title = book_title or graph.subject
     book_title_ja = book_title_ja or book_title
