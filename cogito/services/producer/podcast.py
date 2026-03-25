@@ -246,8 +246,15 @@ def write_podcast_scripts(
             act2_extra=act2_extra, act3_extra=act3_extra,
         )
 
+        # Disable thinking mode for reasoning models (qwen3.5, qwen3, deepseek-r1, etc.)
+        # These models use extended thinking that consumes all context tokens, leaving
+        # nothing for the actual output. /no_think disables this mode in Ollama.
+        _is_thinking_model = any(m in dramaturg_model.lower()
+                                 for m in ("qwen3", "deepseek-r1", "qwq"))
+        invoke_prompt = f"/no_think\n\n{prompt}" if _is_thinking_model else prompt
+
         _t0 = time.time()
-        raw_response = llm.invoke(prompt).content
+        raw_response = llm.invoke(invoke_prompt).content
         event_log.llm("producer/podcast", f"write_script:ep{ep_num}", dramaturg_model, time.time() - _t0)
         parsed: dict | None = None
         error: str | None = None

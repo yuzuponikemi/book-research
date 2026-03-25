@@ -147,9 +147,13 @@ def write_essay(
         concept_graph_json=json.dumps(graph_dict, ensure_ascii=False, indent=2),
     )
 
+    # Disable thinking mode for reasoning models to prevent context exhaustion
+    _is_thinking_model = any(m in model.lower() for m in ("qwen3", "deepseek-r1", "qwq"))
+    invoke_prompt = f"/no_think\n\n{prompt}" if _is_thinking_model else prompt
+
     print("  [essay_writer] generating analytical essay...", end="", flush=True)
     _t0 = time.time()
-    essay_text = llm.invoke(prompt).content
+    essay_text = llm.invoke(invoke_prompt).content
     elapsed = time.time() - _t0
     event_log.llm("producer/essay_writer", "write_essay", model, elapsed)
     print(f" done ({elapsed:.1f}s, {len(essay_text)} chars)")
