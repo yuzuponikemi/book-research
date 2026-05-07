@@ -10,6 +10,7 @@ Output: list[SynthesizedChunk]  (ready to feed into synthesizer.py)
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 
 import time
@@ -74,6 +75,21 @@ def _format_results_for_prompt(results: list[SearchResult], max_chars: int = 800
     return "\n\n---\n\n".join(lines) if lines else "(No search results)"
 
 
+def _is_looping(text: str, window: int = 20, threshold: int = 8) -> bool:
+    """Return True if text contains repetitive looping tokens (gemma4 degenerate mode).
+
+    Checks whether any substring of length `window` appears more than `threshold`
+    times — a reliable signal of the token-repetition failure mode.
+    """
+    if len(text) < window * threshold:
+        return False
+    for i in range(len(text) - window):
+        fragment = text[i: i + window]
+        if text.count(fragment) > threshold:
+            return True
+    return False
+
+
 def aggregate_headings(
     headings: list[Heading],
     results_by_heading: dict[str, list[SearchResult]],
@@ -91,8 +107,10 @@ def aggregate_headings(
     Returns:
         (list[SynthesizedChunk], thinking_log_entries)
     """
-    num_ctx = 32768 if any(m in model for m in ("qwen3", "command-r")) else 16384
-    llm = ChatOllama(model=model, temperature=0.1, num_ctx=num_ctx, format="json")
+    gemma4 = "gemma4" in model.lower()
+    num_ctx = 32768 if any(m in model for m in ("qwen3", "command-r")) else (8192 if gemma4 else 16384)
+    llm = ChatOllama(model=model, temperature=0.1, num_ctx=num_ctx,
+                     **({}  if gemma4 else {"format": "json"}))
 
     chunks: list[SynthesizedChunk] = []
     log: list[dict] = []
@@ -121,6 +139,13 @@ def aggregate_headings(
         except (json.JSONDecodeError, ValueError) as e:
             error = f"JSON parse error: {e}"
             summary = raw_response[:1000]
+
+        # Detect looping-token degenerate output and fall back to raw snippets
+        if _is_looping(summary) or (not summary and not error):
+            fallback = search_results_text[:800]
+            print(f" [looping — fallback to raw snippets]", end="", flush=True)
+            error = (error or "") + " looping-output detected; using raw snippet fallback"
+            summary = fallback
 
         sources = list({r.url for r in results if r.url})
         chunk = SynthesizedChunk(

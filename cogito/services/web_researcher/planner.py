@@ -202,6 +202,9 @@ def _extract_chapters_regex(raw_results: list[dict]) -> list[str]:
     return found[:20]  # cap at 20
 
 
+def _is_gemma4(model: str) -> bool:
+    return "gemma4" in model.lower()
+
 def discover_structure(
     title: str,
     author: str,
@@ -234,6 +237,7 @@ def discover_structure(
         log.append(create_step(
             layer="web_researcher", node="planner",
             action="discover_structure",
+            input_summary=f"title={title}",
             reasoning="No web results — falling back to LLM inference",
         ))
         return [], "none", log
@@ -260,8 +264,10 @@ def discover_structure(
     chapters_input = [{"title": t} for t in chapter_titles]
     enriched: list[dict] = []
     try:
+        gemma4 = _is_gemma4(model)
         num_ctx = 8192
-        llm = ChatOllama(model=model, temperature=0.1, num_ctx=num_ctx, format="json")
+        llm = ChatOllama(model=model, temperature=0.1, num_ctx=num_ctx,
+                         **({}  if gemma4 else {"format": "json"}))
         prompt = DESCRIPTION_ENRICH_PROMPT.format(
             title=title,
             author=author,
@@ -374,9 +380,11 @@ def plan_headings(
         ))
         return discovered, log
 
-    # ── 3. LLM-inferred headings (fallback) ───────────────────────────────────
-    num_ctx = 16384
-    llm = ChatOllama(model=model, temperature=0.2, num_ctx=num_ctx, format="json")
+    # ── 3. LLM-inferred headings (fallback — no web context) ──────────────────
+    gemma4 = _is_gemma4(model)
+    num_ctx = 8192 if gemma4 else 16384
+    llm = ChatOllama(model=model, temperature=0.2, num_ctx=num_ctx,
+                     **({}  if gemma4 else {"format": "json"}))
 
     key_terms = (book_config or {}).get("context", {}).get("key_terms", [])
     key_terms_block = (

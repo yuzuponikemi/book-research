@@ -135,6 +135,14 @@ def synthesize_from_chunks(
     Returns:
         (ConceptGraphV1, thinking_log_entries)
     """
+    if not chunks:
+        print("  ⚠️  synthesize_from_chunks: 0 chunks — returning empty graph", flush=True)
+        empty = ConceptGraphV1(
+            subject=subject, source_mode="web_researcher", generated_by="web_researcher",
+            concepts=[], relations=[], aporias=[], logic_flow="", core_frustration=""
+        )
+        return empty, []
+
     sections = [
         {
             "chunk_index": i,
