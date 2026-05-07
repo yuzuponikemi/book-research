@@ -1,6 +1,9 @@
 # Project Cogito outputs
 data/run_*/
 data/pg59.txt
+data/checkpoints.db
+data/checkpoints.db-wal
+data/checkpoints.db-shm
 logs/*.json
 
 # Byte-compiled / optimized / DLL files
