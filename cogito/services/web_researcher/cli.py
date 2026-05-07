@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 from pathlib import Path
 
@@ -92,8 +93,24 @@ def run(
     print("[4/4] Synthesizing concept graph ...", flush=True)
     graph, log4 = synthesize_from_chunks(chunks, subject=subject, model=model)
 
-    # ── Save concept graph ────────────────────────────────────────────────────
+    # ── Save raw web search content (truth source for factcheck) ─────────────
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    web_results_path = output_path.parent / "web_search_results.json"
+    web_results_data = {
+        "subject": subject,
+        "chunks": [dataclasses.asdict(c) for c in chunks],
+        "raw_results": {
+            hid: [dataclasses.asdict(r) for r in results]
+            for hid, results in results_by_heading.items()
+        },
+    }
+    web_results_path.write_text(
+        json.dumps(web_results_data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"  → web_search_results.json saved ({web_results_path.stat().st_size:,} bytes)")
+
+    # ── Save concept graph ────────────────────────────────────────────────────
     output_path.write_text(
         graph.model_dump_json(indent=2, exclude_none=True),
         encoding="utf-8",
@@ -108,19 +125,26 @@ def run(
 
     # ── Step 5: Generate book guide ───────────────────────────────────────────
     if not skip_guide:
-        print("[5/5] Writing book guide ...", flush=True)
-        guide_path = output_path.parent / "book_guide.md"
-        write_book_guide(
-            chunks=chunks,
-            headings=headings,
-            graph=graph,
-            output_path=guide_path,
-            book_config=book_config,
-            model=guide_model,
-        )
-        print(f"\n{'='*60}")
-        print(f"  Book guide written to {guide_path}")
-        print(f"{'='*60}\n")
+        if not graph.concepts:
+            print(
+                "[5/5] Skipping book guide — concept graph is empty "
+                "(synthesis produced 0 concepts after all retries).",
+                flush=True,
+            )
+        else:
+            print("[5/5] Writing book guide ...", flush=True)
+            guide_path = output_path.parent / "book_guide.md"
+            write_book_guide(
+                chunks=chunks,
+                headings=headings,
+                graph=graph,
+                output_path=guide_path,
+                book_config=book_config,
+                model=guide_model,
+            )
+            print(f"\n{'='*60}")
+            print(f"  Book guide written to {guide_path}")
+            print(f"{'='*60}\n")
 
     return graph
 

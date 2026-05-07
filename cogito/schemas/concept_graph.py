@@ -131,12 +131,25 @@ class ConceptGraphV1(BaseModel):
                 c["source_chunk"] = str(c["source_chunk"])
             safe_concepts.append(c)
 
+        # Normalise relations: drop any entry whose relation_type is not in the
+        # allowed Literal.  Callers should normalise before calling this method
+        # (see analyst/synthesizer._RELATION_MAP and web_researcher/synthesizer
+        # ._RELATION_MAP), but this is a final safety net so a single bad
+        # relation never crashes the whole pipeline.
+        _valid_rt = {"depends_on", "contradicts", "evolves_into"}
+        safe_relations = []
+        for r in data.get("relations", []):
+            rt = r.get("relation_type") if isinstance(r, dict) else None
+            if rt in _valid_rt:
+                safe_relations.append(r)
+            # silently drop relations with an invalid / missing relation_type
+
         return cls(
             subject=subject,
             source_mode=source_mode,
             generated_by=generated_by,
             concepts=safe_concepts,
-            relations=data.get("relations", []),
+            relations=safe_relations,
             aporias=data.get("aporias", []),
             logic_flow=data.get("logic_flow", ""),
             core_frustration=data.get("core_frustration", ""),
