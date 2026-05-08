@@ -129,6 +129,12 @@ class ConceptGraphV1(BaseModel):
                 c["source_chunk"] = "COMBINED"
             elif not isinstance(c["source_chunk"], str):
                 c["source_chunk"] = str(c["source_chunk"])
+            # original_quotes must be a list; LLM sometimes returns "" or a string
+            oq = c.get("original_quotes", [])
+            if isinstance(oq, str):
+                c["original_quotes"] = [oq] if oq.strip() else []
+            elif not isinstance(oq, list):
+                c["original_quotes"] = []
             safe_concepts.append(c)
 
         # Normalise relations: drop any entry whose relation_type is not in the
