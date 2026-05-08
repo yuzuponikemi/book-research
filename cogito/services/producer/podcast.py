@@ -191,6 +191,7 @@ def write_podcast_scripts(
     _script_ctx = 8192 if _is_thinking_model else 16384
     _fmt = "json" if _is_thinking_model else None
     llm = ChatOllama(model=dramaturg_model, temperature=0.7, num_ctx=_script_ctx,
+                     num_predict=8192,
                      **({"format": _fmt} if _fmt else {}))
 
     book_title = book_title or graph.subject
