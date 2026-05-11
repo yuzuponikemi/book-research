@@ -1,10 +1,17 @@
 # Project Cogito outputs
 data/run_*/
-data/pg59.txt
+data/pg*.txt
 data/checkpoints.db
 data/checkpoints.db-wal
 data/checkpoints.db-shm
+data/cache/
 logs/*.json
+
+# One-off run scripts
+run_*.sh
+
+# Generated benchmark results
+scripts/bench_results.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

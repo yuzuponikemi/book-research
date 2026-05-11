@@ -1,0 +1,66 @@
+book:
+  title: "The Society of the Spectacle"
+  title_ja: "スペクタクルの社会"
+  author: "Guy Debord"
+  author_ja: "ギー・ドゥボール"
+  year: 1967
+
+source:
+  type: "web"
+
+chunking:
+  strategy: "heading"
+
+research:
+  search_queries:
+    - "Debord Society of the Spectacle commodity fetishism alienation critique"
+    - "Debord spectacle representation lived experience situationist"
+    - "Debord détournement dérive Situationist International recuperation"
+    - "スペクタクルの社会 ドゥボール 現代的意義 SNS 監視資本主義"
+    - "Debord spectacle social media attention economy digital capitalism"
+  max_search_results: 5
+
+context:
+  era: "20th century"
+  tradition: "Situationist International, Western Marxism, Critical Theory"
+  key_terms:
+    - "Spectacle (スペクタクル)"
+    - "Commodity Fetishism (商品フェティシズム)"
+    - "Alienation (疎外)"
+    - "Lived Experience (生きられた経験)"
+    - "Representation vs. Reality (表象と現実)"
+    - "Détournement (デトゥルヌマン)"
+    - "Dérive (漂流)"
+    - "Recuperation (回収・無毒化)"
+    - "Pseudo-needs (擬似欲求)"
+    - "Concentrated vs. Diffuse Spectacle (集中型・拡散型スペクタクル)"
+  notable_critics:
+    - name: "Baudrillard"
+      perspective: "Extended spectacle into hyperreality — simulation replaces not just lived experience but the real itself"
+    - name: "Fredric Jameson"
+      perspective: "Situationist critique prefigures postmodern cultural logic; spectacle = cultural dominant of late capitalism"
+    - name: "Anselm Jappe"
+      perspective: "Situationist thought as critique of value-form rather than merely cultural politics"
+    - name: "T.J. Clark"
+      perspective: "Criticised Debord for over-unifying the concept; spectacle is more contradictory than Debord allows"
+    - name: "Mark Fisher"
+      perspective: "Capitalist realism as successor to spectacle: the impossibility of imagining alternatives"
+
+lateral:
+  domain_hints: ["social media", "attention economy", "influencer culture", "AI content generation"]
+  include_arxiv: false
+
+prompt_fragments:
+  work_description: >
+    Debord's "The Society of the Spectacle" (1967) opens: "All that was once directly
+    lived has become mere representation." The spectacle is not a collection of images
+    but a social relation among people mediated by images — the culmination of commodity
+    logic in which appearance displaces being. The Situationist International proposed
+    détournement and constructed situations as counter-practices.
+  analysis_guidance: >
+    Pay attention to: the spectacle as the autonomous movement of the non-living;
+    the distinction between concentrated (totalitarian) and diffuse (consumer) spectacle,
+    and the later "integrated spectacle" combining both; the connection between Debord's
+    spectacle and contemporary social media feed logic; recuperation as the mechanism
+    by which radical critique is absorbed and sold back; the Situationist concept of
+    dérive as a practice of spatial critique — contrast with algorithmic navigation.

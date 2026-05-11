@@ -309,7 +309,7 @@ def show_outputs(results: list[RunResult], models: list[str], task_ids: list[str
 def main():
     parser = argparse.ArgumentParser(description="gemma4 モデル比較ベンチマーク")
     parser.add_argument("--models", nargs="+",
-                        default=["gemma4:e4b", "gemma4:e4b-mlx"])
+                        default=["qwen3.5:latest", "qwen3.6-27b:mtp"])
     parser.add_argument("--tasks", nargs="+", default=list(TASKS.keys()),
                         choices=list(TASKS.keys()))
     parser.add_argument("--runs", type=int, default=2,
@@ -330,15 +330,15 @@ def main():
         OLLAMA_URL = args.proxy
 
     print(f"{'═'*90}")
-    print(f"  gemma4 Benchmark  —  {len(args.models)} models × {len(args.tasks)} tasks × {args.runs} runs")
+    print(f"  LLM Benchmark  —  {len(args.models)} models × {len(args.tasks)} tasks × {args.runs} runs")
     print(f"{'═'*90}")
     print(f"  Models : {', '.join(args.models)}")
     print(f"  Tasks  : {', '.join(args.tasks)}")
     print(f"  Proxy  : {OLLAMA_URL}")
     print()
 
-    # Show server_cmd hint for MLX models
-    mlx_models = [m for m in args.models if m.endswith('-mlx')]
+    # Show server_cmd hint for MLX/MTP models
+    mlx_models = [m for m in args.models if m.endswith('-mlx') or ':mtp' in m or ':no-mtp' in m]
     if mlx_models:
         try:
             import urllib.request

@@ -1,0 +1,67 @@
+book:
+  title: "The Age of Surveillance Capitalism"
+  title_ja: "監視資本主義の時代"
+  author: "Shoshana Zuboff"
+  author_ja: "ショシャナ・ズボフ"
+  year: 2019
+
+source:
+  type: "web"
+
+chunking:
+  strategy: "heading"
+
+research:
+  search_queries:
+    - "Zuboff surveillance capitalism behavioral surplus prediction products"
+    - "Zuboff Big Other instrumentarian power behavioral modification"
+    - "Zuboff surveillance capitalism Google Facebook data behavioral futures markets"
+    - "監視資本主義 ズボフ 行動余剰 予測商品 デジタル植民地主義"
+    - "Zuboff surveillance capitalism AI LLM data privacy critique 2024"
+  max_search_results: 5
+
+context:
+  era: "21st century"
+  tradition: "Critical Theory, Political Economy, Technology Studies"
+  key_terms:
+    - "Surveillance Capitalism (監視資本主義)"
+    - "Behavioral Surplus (行動余剰)"
+    - "Prediction Products (予測商品)"
+    - "Behavioral Futures Markets (行動先物市場)"
+    - "Big Other (ビッグ・アザー)"
+    - "Instrumentarian Power (道具主義的権力)"
+    - "Behavioral Modification (行動変容)"
+    - "Digital Colonialism (デジタル植民地主義)"
+    - "Epistemic Inequality (認識論的不平等)"
+    - "The Right to the Future Tense (未来時制への権利)"
+  notable_critics:
+    - name: "Baudrillard"
+      perspective: "Zuboff's surveillance capitalism as the operational realization of hyperreality — behavioral data as the ultimate simulacrum"
+    - name: "Foucault"
+      perspective: "Zuboff builds on panopticon theory but argues surveillance capitalism differs: it modifies behavior for profit rather than discipline for social order"
+    - name: "Nick Couldry & Ulises Mejias"
+      perspective: "Data colonialism as parallel framework — critiques Zuboff for focusing on corporations rather than structural colonialism"
+    - name: "Evgeny Morozov"
+      perspective: "Criticised Zuboff for ignoring political economy; surveillance capitalism is inseparable from neoliberal state"
+    - name: "Tim Wu"
+      perspective: "The Attention Merchants as complementary analysis — attention economy as precursor to behavioral modification"
+
+lateral:
+  domain_hints: ["large language models", "AI alignment", "data governance", "platform regulation", "privacy"]
+  include_arxiv: true
+
+prompt_fragments:
+  work_description: >
+    Zuboff's "The Age of Surveillance Capitalism" (2019) identifies a new economic logic
+    in which human experience is unilaterally claimed as raw material for behavioral data.
+    This "behavioral surplus" — exceeding what is needed to improve services — is fed into
+    prediction products sold on behavioral futures markets. The Big Other is the automated
+    architecture that observes, nudges, and modifies human behavior at scale.
+  analysis_guidance: >
+    Pay attention to: behavioral surplus as the original extraction mechanism — compare to
+    Baudrillard's sign value and Veblen's conspicuous consumption as earlier moments of
+    capitalist abstraction; the Big Other vs. Foucault's panopticon — surveillance
+    capitalism requires compliant subjects, not disciplined ones; instrumentarian power
+    as a third logic alongside totalitarianism and democracy; the connection between
+    Zuboff's prediction products and AI RLHF/fine-tuning pipelines; epistemic inequality
+    as the asymmetry between those who know and those who are known.

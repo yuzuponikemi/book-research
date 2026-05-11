@@ -1,0 +1,68 @@
+book:
+  title: "The Theory of the Leisure Class"
+  title_ja: "有閑階級の理論"
+  author: "Thorstein Veblen"
+  author_ja: "ソースティン・ヴェブレン"
+  year: 1899
+
+source:
+  type: "gutenberg"
+  url: "https://www.gutenberg.org/cache/epub/833/pg833.txt"
+  cache_filename: "pg833.txt"
+
+chunking:
+  strategy: "regex"
+  pattern: "^(CHAPTER\\s+[IVXLC]+)\\b"
+
+research:
+  search_queries:
+    - "Veblen leisure class conspicuous consumption status emulation"
+    - "Veblen pecuniary emulation wasteful expenditure social class"
+    - "Veblen instinct of workmanship predatory culture capitalism"
+    - "有閑階級の理論 ヴェブレン 顕示的消費 現代的意義"
+  max_search_results: 5
+
+context:
+  era: "late 19th century"
+  tradition: "Institutional Economics, American Pragmatism, Social Critique"
+  key_terms:
+    - "Conspicuous Consumption (顕示的消費)"
+    - "Conspicuous Leisure (顕示的余暇)"
+    - "Pecuniary Emulation (金銭的模倣)"
+    - "Predatory Culture (略奪的文化)"
+    - "Instinct of Workmanship (職人本能)"
+    - "Wasteful Expenditure (浪費的支出)"
+    - "Status and Invidious Comparison (地位と差別的比較)"
+    - "Leisure Class (有閑階級)"
+    - "Pecuniary Canons of Taste (金銭的趣味の基準)"
+    - "Reputability (体裁・名誉)"
+  notable_critics:
+    - name: "Baudrillard"
+      perspective: "Veblen's conspicuous consumption prefigures sign value; status display as semiotic system"
+    - name: "C. Wright Mills"
+      perspective: "Extended Veblen's leisure class into analysis of the mid-20th century power elite"
+    - name: "John Kenneth Galbraith"
+      perspective: "Built on Veblen in The Affluent Society — advertising manufactures wants to absorb surplus production"
+    - name: "Bourdieu"
+      perspective: "Distinction (1979) reformulates Veblen's status competition as cultural capital and taste"
+    - name: "Robert Frank"
+      perspective: "Luxury fever as contemporary incarnation of conspicuous consumption in behavioral economics"
+
+lateral:
+  domain_hints: ["luxury goods", "social media signaling", "status economy", "behavioral economics"]
+  include_arxiv: false
+
+prompt_fragments:
+  work_description: >
+    Veblen's "Theory of the Leisure Class" (1899) identifies the leisure class as those
+    who display wealth through non-productive consumption and enforced idleness. Conspicuous
+    consumption — the public display of waste — signals social status and drives pecuniary
+    emulation throughout society. The instinct of workmanship is systematically suppressed
+    by the predatory values of the leisure class.
+  analysis_guidance: >
+    Pay attention to: conspicuous consumption as a signaling system (compare to Baudrillard's
+    sign value and Bourdieu's distinction); the instinct of workmanship vs. predatory culture
+    as a tension relevant to maker culture and platform economy; pecuniary emulation as the
+    engine of consumer society (anticipating Baudrillard's pseudo-needs); the connection
+    between Veblen's status display and contemporary social media performance; wasteful
+    expenditure and its relationship to the attention economy.

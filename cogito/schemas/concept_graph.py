@@ -150,13 +150,18 @@ class ConceptGraphV1(BaseModel):
                 safe_relations.append(r)
             # silently drop relations with an invalid / missing relation_type
 
+        # Normalise aporias: drop any entry that is not a valid dict.
+        safe_aporias = [
+            a for a in data.get("aporias", []) if isinstance(a, dict)
+        ]
+
         return cls(
             subject=subject,
             source_mode=source_mode,
             generated_by=generated_by,
             concepts=safe_concepts,
             relations=safe_relations,
-            aporias=data.get("aporias", []),
+            aporias=safe_aporias,
             logic_flow=data.get("logic_flow", ""),
             core_frustration=data.get("core_frustration", ""),
         )

@@ -1,0 +1,65 @@
+book:
+  title: "The Consumer Society: Myths and Structures"
+  title_ja: "消費社会の神話と構造"
+  author: "Jean Baudrillard"
+  author_ja: "ジャン・ボードリヤール"
+  year: 1970
+
+source:
+  type: "web"
+
+chunking:
+  strategy: "heading"
+
+research:
+  search_queries:
+    - "Baudrillard Consumer Society myths structures sign value simulation"
+    - "Baudrillard system of objects needs consumption ideology"
+    - "Baudrillard hyperreality simulacra consumer capitalism critique"
+    - "消費社会の神話と構造 ボードリヤール 記号 消費 現代的意義"
+    - "Baudrillard surveillance capitalism social media attention economy"
+  max_search_results: 5
+
+context:
+  era: "20th century"
+  tradition: "Post-structuralism, Critical Theory, French Theory"
+  key_terms:
+    - "Sign Value (記号価値)"
+    - "Exchange Value (交換価値)"
+    - "Use Value (使用価値)"
+    - "System of Objects (モノの体系)"
+    - "Needs and Pseudo-needs (欲求と擬似欲求)"
+    - "Consumption as Social Practice (社会的実践としての消費)"
+    - "The Code (コード)"
+    - "Mass Media and Simulation (マスメディアとシミュラクル)"
+    - "Hyperreality (ハイパーリアリティ)"
+    - "Spectacle and Fetishism (スペクタクルとフェティシズム)"
+  notable_critics:
+    - name: "Guy Debord"
+      perspective: "Parallel critique of spectacle society; Baudrillard extends commodity fetishism to the semiotic realm"
+    - name: "Fredric Jameson"
+      perspective: "Read Baudrillard as the theorist of postmodern cultural logic of late capitalism"
+    - name: "Douglas Kellner"
+      perspective: "Criticised Baudrillard for political quietism; argued his theory loses the capacity for critique"
+    - name: "Mike Featherstone"
+      perspective: "Connected Baudrillard to sociology of consumption and lifestyle"
+    - name: "Marx"
+      perspective: "Foundation: Baudrillard replaces Marxist use/exchange value with sign value"
+
+lateral:
+  domain_hints: ["attention economy", "social media", "AI recommendation systems", "digital capitalism"]
+  include_arxiv: false
+
+prompt_fragments:
+  work_description: >
+    Baudrillard's "The Consumer Society" (1970) argues that modern consumption is not
+    driven by needs but by a self-referential system of signs and codes. Objects are
+    consumed not for their utility but for the social meanings they encode. This
+    semiotic critique dismantles Marx's use/exchange value distinction, replacing it
+    with sign value as the primary logic of capitalist reproduction.
+  analysis_guidance: >
+    Pay attention to: the shift from use value to sign value as the engine of consumption;
+    pseudo-needs manufactured by the code rather than arising organically; mass media as
+    the nervous system of the sign economy; the parallel between Baudrillard's "code"
+    and modern algorithmic recommendation systems; hyperreality as the condition in which
+    simulation precedes and produces the real.

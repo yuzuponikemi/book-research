@@ -10,6 +10,7 @@ import json
 import time
 
 from langchain_ollama import ChatOllama
+from pydantic import ValidationError
 
 from cogito.utils import event_log
 
@@ -173,11 +174,12 @@ def synthesize_from_chunks(
     )
 
     all_steps: list[dict] = []
-    parsed: dict = {
+    best_parsed: dict = {
         "concepts": [], "relations": [],
         "aporias": [], "logic_flow": "", "core_frustration": ""
     }
     last_error: str | None = None
+    valid_graph: ConceptGraphV1 | None = None
 
     for attempt in range(1, _MAX_SYNTHESIS_RETRIES + 1):
         # Increase temperature slightly on retries to escape degenerate modes.
@@ -187,7 +189,7 @@ def synthesize_from_chunks(
         if attempt > 1:
             print(
                 f"  [synthesizer] retry {attempt}/{_MAX_SYNTHESIS_RETRIES} "
-                f"(prev attempt returned {len(parsed.get('concepts', []))} concepts, "
+                f"(prev attempt: {len(best_parsed.get('concepts', []))} concepts, "
                 f"error={last_error!r})",
                 flush=True,
             )
@@ -222,6 +224,20 @@ def synthesize_from_chunks(
             # Normalise relation_type values before Pydantic validation.
             _normalise_relations(attempt_parsed)
 
+            # Attempt Pydantic construction inside the loop so ValidationErrors
+            # also trigger a retry rather than crashing the pipeline.
+            if attempt_parsed.get("concepts"):
+                try:
+                    valid_graph = ConceptGraphV1.from_legacy_dict(
+                        attempt_parsed,
+                        subject=subject,
+                        source_mode="web_researcher",
+                        generated_by="web_researcher",
+                    )
+                except ValidationError as e:
+                    error = f"Pydantic validation error: {e}"
+                    valid_graph = None
+
         all_steps.append(create_step(
             layer="web_researcher", node="synthesizer",
             action=f"synthesize_concept_graph (attempt {attempt})",
@@ -238,33 +254,31 @@ def synthesize_from_chunks(
         ))
 
         last_error = error
-        if error is None and attempt_parsed.get("concepts"):
-            # Success: at least one concept was extracted.
-            parsed = attempt_parsed
+        if valid_graph is not None:
+            # Success: graph was constructed without errors.
             break
 
         # Keep the best result so far (prefer non-empty over empty).
-        if len(attempt_parsed.get("concepts", [])) > len(parsed.get("concepts", [])):
-            parsed = attempt_parsed
+        if len(attempt_parsed.get("concepts", [])) > len(best_parsed.get("concepts", [])):
+            best_parsed = attempt_parsed
     else:
-        # All retries exhausted — log a warning and continue with partial results.
+        # All retries exhausted — log a warning and try a final fallback construction.
         print(
             f"  [synthesizer] WARNING: all {_MAX_SYNTHESIS_RETRIES} attempts yielded "
-            f"{len(parsed.get('concepts', []))} concepts. "
-            "Saving partial results and continuing.",
+            f"{len(best_parsed.get('concepts', []))} concepts. "
+            "Attempting fallback construction and continuing.",
             flush=True,
         )
         event_log.step(
             "web_researcher/synthesizer",
             f"synthesize_concept_graph FAILED after {_MAX_SYNTHESIS_RETRIES} retries "
-            f"— partial result: {len(parsed.get('concepts', []))} concepts",
+            f"— partial result: {len(best_parsed.get('concepts', []))} concepts",
+        )
+        valid_graph = ConceptGraphV1.from_legacy_dict(
+            best_parsed,
+            subject=subject,
+            source_mode="web_researcher",
+            generated_by="web_researcher",
         )
 
-    graph = ConceptGraphV1.from_legacy_dict(
-        parsed,
-        subject=subject,
-        source_mode="web_researcher",
-        generated_by="web_researcher",
-    )
-
-    return graph, all_steps
+    return valid_graph, all_steps
