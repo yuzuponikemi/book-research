@@ -1,0 +1,67 @@
+book:
+  title: "Simulacra and Simulation"
+  title_ja: "シミュラークルとシミュレーション"
+  author: "Jean Baudrillard"
+  author_ja: "ジャン・ボードリヤール"
+  year: 1981
+
+source:
+  type: "web"
+
+chunking:
+  strategy: "heading"
+
+research:
+  search_queries:
+    - "Baudrillard Simulacra and Simulation hyperreality orders of simulacra"
+    - "Baudrillard map territory precession of simulacra postmodern reality"
+    - "Baudrillard simulation model real implosion meaning media"
+    - "シミュラークルとシミュレーション ボードリヤール ハイパーリアリティ 記号 現実"
+    - "Baudrillard simulacra AI digital media social media virtual reality contemporary"
+  max_search_results: 5
+
+context:
+  era: "20th century"
+  tradition: "Post-structuralism, Postmodernism, French Theory"
+  key_terms:
+    - "Simulacrum (シミュラークル)"
+    - "Simulation (シミュレーション)"
+    - "Hyperreality (ハイパーリアリティ)"
+    - "Precession of Simulacra (シミュラークルの先行)"
+    - "Orders of Simulacra (シミュラークルの位相)"
+    - "The Map and the Territory (地図と領土)"
+    - "Implosion (内破)"
+    - "The Desert of the Real (現実の砂漠)"
+    - "The Code (コード)"
+    - "Imaginary (イマジナリー)"
+  notable_critics:
+    - name: "Fredric Jameson"
+      perspective: "Read Baudrillard's simulacra as the cultural dominant of postmodernism and late capitalism"
+    - name: "Guy Debord"
+      perspective: "Precursor: Debord's spectacle society is a direct antecedent; Baudrillard radicalises the critique by dissolving the original into the copy"
+    - name: "Jean-François Lyotard"
+      perspective: "Shared postmodern frame; diverges on the status of grand narratives vs. the code"
+    - name: "Douglas Kellner"
+      perspective: "Critiqued Baudrillard for abandoning political critique in favour of nihilistic theory"
+    - name: "Slavoj Žižek"
+      perspective: "Challenged Baudrillard's dissolution of the real; reasserted the Lacanian Real beneath simulation"
+
+lateral:
+  domain_hints: ["deepfake", "AI-generated media", "virtual reality", "social media filter bubbles", "LLM hallucination"]
+  include_arxiv: false
+
+prompt_fragments:
+  work_description: >
+    Baudrillard's "Simulacra and Simulation" (1981) argues that contemporary society
+    has replaced reality and meaning with symbols and signs, producing a hyperreality
+    in which simulations have no referent in the real world. The map precedes the
+    territory; the copy has obliterated the original. Three orders of simulacra
+    (counterfeit → production → simulation) trace the historical collapse of the
+    distinction between real and model.
+  analysis_guidance: >
+    Pay attention to: the three orders of simulacra and how each dissolves the
+    previous relationship between sign and referent; hyperreality as a condition
+    in which models generate the real rather than represent it; implosion of meaning
+    in mass media; the Desert of the Real as the condition of postmodern existence;
+    contemporary resonances with deepfakes, LLM hallucination, social media
+    constructed reality, and AI-generated content.
